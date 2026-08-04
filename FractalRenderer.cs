@@ -160,6 +160,24 @@ internal sealed class FractalRenderer : IDisposable
 
     private void WorkerLoop()
     {
+        try
+        {
+            Render();
+        }
+        catch (Exception ex)
+        {
+            // An exception here used to kill the process with nothing on stdout, which made a
+            // failure indistinguishable from a clean exit. Say what happened.
+            Console.Error.WriteLine($"fractal kernel thread failed: {ex}");
+            Failure = ex;
+        }
+    }
+
+    /// <summary>Set if the kernel thread died, so the host can report it rather than fall silent.</summary>
+    public Exception? Failure { get; private set; }
+
+    private void Render()
+    {
         var sw = new Stopwatch();
 
         while (_running)

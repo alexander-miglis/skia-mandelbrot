@@ -382,14 +382,20 @@ internal static class Program
         var canvas = _surface.Canvas;
         canvas.Clear(SKColors.Black);
 
+        // Must outlive the flush below. SKImage.FromPixels neither copies the pixels nor takes
+        // ownership of them, so Skia may not have read them yet when the draw call returns —
+        // releasing the image before flushing lets it read memory that the kernel buffer has since
+        // freed or reallocated, which shows up as an intermittent hard crash with no managed stack.
+        SKImage? image = null;
+
         if (_renderer.TryTakeLatest(ref _bitmap, out var frame, out int fw, out int fh)
             && frame.Generation == now.Generation)
         {
             var (k, tx, ty) = FractalRenderer.Reproject(frame, fw, fh, now, fb.X, fb.Y);
 
-            // Wrap the CPU buffer as an image without copying, and give it a fresh identity each
-            // frame so Skia re-uploads it instead of reusing last frame's cached texture.
-            using var image = SKImage.FromPixels(_bitmap!.Info, _bitmap.GetPixels(), _bitmap.RowBytes);
+            // Wrapping without copying, with a fresh identity each frame so Skia re-uploads it
+            // instead of reusing last frame's cached texture.
+            image = SKImage.FromPixels(_bitmap!.Info, _bitmap.GetPixels(), _bitmap.RowBytes);
             canvas.Save();
             canvas.Translate(tx, ty);
             canvas.Scale(k, k);
@@ -409,6 +415,7 @@ internal static class Program
 
         _surface.Flush();
         _grContext.Flush();
+        image?.Dispose();
 
         _frames++;
 

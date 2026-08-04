@@ -192,6 +192,13 @@ the kernel switches to perturbation against a high-precision reference orbit.
 
 **Why it isn't pixelated** — three things, all worth knowing about:
 
+0. *The image handed to Skia outlives the flush.* `SKImage.FromPixels` neither copies the kernel
+   buffer nor takes ownership of it, and Skia's GPU backend may not have read those pixels by the time
+   the draw call returns. Releasing the image before flushing therefore lets it read memory the kernel
+   buffer has since freed or reallocated — which surfaced as an intermittent hard crash with no
+   managed stack trace and no output at all. The kernel thread also reports exceptions now, since one
+   dying there used to be indistinguishable from a clean exit.
+
 1. *The kernel runs off the display thread.* [FractalRenderer.cs](FractalRenderer.cs) renders on a
    worker while the window animates at vsync. Each display frame takes the newest finished frame and
    re-projects it onto the current camera with a Skia translate+scale derived from the two views'
