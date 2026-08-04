@@ -37,6 +37,9 @@ internal static class Program
     /// <summary>Frames the rate must be unsustainable before giving up, so a spike cannot end a descent.</summary>
     private const int GiveUpFrames = 150;
 
+    /// <summary>Extra seconds a snapshot run may wait for a cross-fade to complete.</summary>
+    private const double FadeGrace = 4.0;
+
     /// <summary>
     /// Fraction of the estimated kernel latency to render ahead by. Deliberately under 1: a frame
     /// only covers the screen if its view is at least as wide as the view at the moment it lands,
@@ -106,6 +109,7 @@ internal static class Program
     private static int _winW = 1280, _winH = 800;
     private static string? _snapshotPath;
     private static bool _showMenu = true;
+    private static int _paletteOverride = -1;
 
     private static void Main(string[] args)
     {
@@ -157,6 +161,12 @@ internal static class Program
                 case "--no-menu":
                     _showMenu = false;
                     break;
+                case "--no-hud":
+                    _hud = false;
+                    break;
+                case "--palette" when int.TryParse(Next(), out int p):
+                    _paletteOverride = p;
+                    break;
                 case "--snapshot" when Next() is { Length: > 0 } path:
                     _snapshotPath = path;
                     break;
@@ -178,6 +188,9 @@ internal static class Program
                                             Above 1 supersamples for extra crispness; below 1 is
                                             softer but each descent reaches far deeper.
                           --no-menu         skip the startup settings screen
+                          --no-hud          hide the readout (for clean stills)
+                          --palette N       fix the gradient: 0 Electric, 1 Ember, 2 Aurora,
+                                            3 Abyss, 4 Copper (default: a new one per descent)
                           --duration N      exit after N seconds (default: run forever)
                           --snapshot FILE   write the last frame to FILE as a PNG on exit
 
@@ -338,7 +351,7 @@ internal static class Program
         }
 
         var gradients = Mandelbrot.Gradient.All;
-        int chosen = _menu?.Palette ?? -1;
+        int chosen = _menu?.Palette ?? _paletteOverride;
         int wanted = chosen >= 0 ? chosen % gradients.Length : _director.Cycle % gradients.Length;
         if (wanted != _paletteChoice)
         {
@@ -398,7 +411,13 @@ internal static class Program
         _grContext.Flush();
 
         _frames++;
-        if (Clock.Elapsed.TotalSeconds >= _duration)
+
+        // A timed run can land in the middle of a cross-fade, where the frame is largely black. For a
+        // snapshot that is useless, so wait for the fade to finish — but only briefly, so a run can
+        // never hang waiting for a descent that is still fading in.
+        bool timeUp = Clock.Elapsed.TotalSeconds >= _duration;
+        bool presentable = _director.Fade >= 0.999 || _snapshotPath is null;
+        if (timeUp && (presentable || Clock.Elapsed.TotalSeconds >= _duration + FadeGrace))
         {
             if (_snapshotPath is not null) SaveSnapshot(_snapshotPath);
             Console.WriteLine($"Rendered {_frames} frames in {Clock.Elapsed.TotalSeconds:0.0}s " +

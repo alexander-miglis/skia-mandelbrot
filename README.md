@@ -19,7 +19,32 @@ Keys: `esc`/`tab` settings · `space` pause · `R` new descent · `↑`/`↓` zo
 --quality N       kernel resolution vs the window, 0.2-2.0 (default 1); above 1 supersamples
 --no-menu         skip the startup settings screen
 --duration N      exit after N seconds (default: run forever)
+--no-hud          hide the readout, for clean stills
+--palette N       fix the gradient: 0 Electric, 1 Ember, 2 Aurora, 3 Abyss, 4 Copper
 --snapshot FILE   write the last frame to FILE as a PNG on exit
+```
+
+## Screenshots
+
+All four rendered in **Super crisp** mode (2× supersampled, four samples per pixel), one per colour
+gradient, captured with `--no-hud --quality 2 --speed 0.09`:
+
+| Electric | Ember |
+| --- | --- |
+| ![Electric](docs/electric.jpg) | ![Ember](docs/ember.jpg) |
+| **Aurora** | **Abyss** |
+| ![Aurora](docs/aurora.jpg) | ![Abyss](docs/abyss.jpg) |
+
+A centre crop at **1:1, no resampling** — actual output pixels, so the supersampling is visible rather
+than implied. Filaments hold their shape down to single pixels instead of breaking into speckle:
+
+![Detail at 1:1](docs/detail-1to1.jpg)
+
+Reproduce any of them:
+
+```bash
+dotnet run -c Release -- --no-menu --no-hud --quality 2 --speed 0.09 \
+    --seed 31 --palette 3 --duration 90 --snapshot abyss.png
 ```
 
 ## Startup settings
