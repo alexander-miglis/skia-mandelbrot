@@ -1,0 +1,23 @@
+{
+  "profiles": {
+    "Fractal Zoom": {
+      "commandName": "Project"
+    },
+    "Deep dive": {
+      "commandName": "Project",
+      "commandLineArgs": "--speed 1.5 --quality 0.6"
+    },
+    "Max sharpness": {
+      "commandName": "Project",
+      "commandLineArgs": "--speed 0.42 --quality 1"
+    },
+    "Snapshot after 30s": {
+      "commandName": "Project",
+      "commandLineArgs": "--duration 30 --snapshot fractal.png"
+    },
+    "Small window": {
+      "commandName": "Project",
+      "commandLineArgs": "--size 900x600"
+    }
+  }
+}

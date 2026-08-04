@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Fractal Zoom",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build (Release)",
+      "program": "${workspaceFolder}/bin/Release/net10.0/FractalZoom.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    },
+    {
+      "name": "Fractal Zoom — deep dive",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build (Release)",
+      "program": "${workspaceFolder}/bin/Release/net10.0/FractalZoom.dll",
+      "args": ["--speed", "1.5", "--quality", "0.6"],
+      "cwd": "${workspaceFolder}",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    },
+    {
+      "name": "Fractal Zoom — snapshot after 30s",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build (Release)",
+      "program": "${workspaceFolder}/bin/Release/net10.0/FractalZoom.dll",
+      "args": ["--duration", "30", "--snapshot", "fractal.png"],
+      "cwd": "${workspaceFolder}",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    },
+    {
+      "name": "Fractal Zoom — Debug build (breakpoints)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build (Debug)",
+      "program": "${workspaceFolder}/bin/Debug/net10.0/FractalZoom.dll",
+      "args": ["--size", "900x600"],
+      "cwd": "${workspaceFolder}",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}

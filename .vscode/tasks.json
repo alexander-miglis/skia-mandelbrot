@@ -1,0 +1,20 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build (Release)",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "${workspaceFolder}/FractalZoom.csproj", "-c", "Release"],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "build (Debug)",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "${workspaceFolder}/FractalZoom.csproj", "-c", "Debug"],
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}
