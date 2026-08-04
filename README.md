@@ -2,6 +2,10 @@
 
 A C# / SkiaSharp app that flies into the Mandelbrot set continuously and never stops.
 
+[![Fractal Zoom](docs/electric.jpg)](docs/electric.jpg)
+
+<sub>Super crisp mode, 2× supersampled, at 5.6e5× magnification. [More below.](#screenshots)</sub>
+
 ```bash
 dotnet run -c Release
 ```
@@ -31,14 +35,14 @@ gradient, captured with `--no-hud --quality 2 --speed 0.09`:
 
 | Electric | Ember |
 | --- | --- |
-| ![Electric](docs/electric.jpg) | ![Ember](docs/ember.jpg) |
+| [![Electric](docs/electric.jpg)](docs/electric.jpg) | [![Ember](docs/ember.jpg)](docs/ember.jpg) |
 | **Aurora** | **Abyss** |
-| ![Aurora](docs/aurora.jpg) | ![Abyss](docs/abyss.jpg) |
+| [![Aurora](docs/aurora.jpg)](docs/aurora.jpg) | [![Abyss](docs/abyss.jpg)](docs/abyss.jpg) |
 
 A centre crop at **1:1, no resampling** — actual output pixels, so the supersampling is visible rather
 than implied. Filaments hold their shape down to single pixels instead of breaking into speckle:
 
-![Detail at 1:1](docs/detail-1to1.jpg)
+[![Detail at 1:1](docs/detail-1to1.jpg)](docs/detail-1to1.jpg)
 
 Reproduce any of them:
 
