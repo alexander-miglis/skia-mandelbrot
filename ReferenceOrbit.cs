@@ -153,8 +153,12 @@ internal sealed class ReferenceOrbit
                 // The step below needs Z[n+1] to rebuild z, so rebase if the orbit is exhausted.
                 if (n + 1 >= count)
                 {
-                    dzr += zr[n];
-                    dzi += zi[n];
+                    // z, then z relative to the start of the orbit. Subtracting Z[0] is what makes
+                    // this general: it is zero for a Mandelbrot, whose orbit starts there, but a
+                    // Julia's starts at the anchor, and leaving it out puts every rebased pixel out
+                    // by that anchor.
+                    dzr += zr[n] - zr[0];
+                    dzi += zi[n] - zi[0];
                     n = 0;
                 }
 
@@ -178,13 +182,18 @@ internal sealed class ReferenceOrbit
             }
 
             // Rebase whenever the orbit passes nearer the origin than the delta itself. Holding z
-            // directly is then more accurate than holding it as an offset from Z[n], and since
-            // Z[0] is exactly 0 the switch loses nothing. This is what removes the usual
-            // perturbation "glitches" without needing a second reference orbit.
+            // as an offset from the start of the orbit is then more accurate than holding it as an
+            // offset from Z[n]. This is what removes the usual perturbation "glitches" without
+            // needing a second reference orbit.
+            //
+            // Relative to Z[0], not absolute: for a Mandelbrot that is the same thing, because its
+            // orbit starts at zero, and writing it as though it always were is what made the Julia
+            // come out as faceted terraces with speckle across them — every rebased pixel was
+            // reconstructed an anchor away from where it belonged.
             if (mag2 < dzr * dzr + dzi * dzi)
             {
-                dzr = fr;
-                dzi = fi;
+                dzr = fr - zr[0];
+                dzi = fi - zi[0];
                 n = 0;
             }
         }

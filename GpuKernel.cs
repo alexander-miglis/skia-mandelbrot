@@ -819,10 +819,12 @@ internal sealed unsafe class GpuKernel : IDisposable
             {
                 if (n + 1 >= uOrbitCount)
                 {
-                    dzr += z.x;
-                    dzi += z.y;
+                    // Relative to Z[0]: zero for a Mandelbrot, the anchor for a Julia.
+                    dvec2 start = orbitAt(0);
+                    dzr += z.x - start.x;
+                    dzi += z.y - start.y;
                     n = 0;
-                    z = orbitAt(0);
+                    z = start;
                 }
 
                 double nr = 2.0lf * (z.x * dzr - z.y * dzi) + (dzr * dzr - dzi * dzi) + dcr;
@@ -852,13 +854,15 @@ internal sealed unsafe class GpuKernel : IDisposable
                 }
 
                 // Same rebasing rule as the CPU path: once the orbit passes nearer the origin than
-                // the delta, holding z directly beats holding it as an offset.
+                // the delta, holding z as an offset from the orbit's start beats holding it as an
+                // offset from Z[n]. Relative to Z[0], which is zero only for the Mandelbrot.
                 if (mz < max(abs(dzr), abs(dzi)))
                 {
-                    dzr = fr;
-                    dzi = fi;
+                    dvec2 start = orbitAt(0);
+                    dzr = fr - start.x;
+                    dzi = fi - start.y;
                     n = 0;
-                    z = orbitAt(0);
+                    z = start;
                 }
             }
 
