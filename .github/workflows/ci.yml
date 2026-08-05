@@ -65,7 +65,7 @@ jobs:
             libx11-6 libxrandr2 libxinerama1 libxcursor1 libxi6 \
             libxext6 libxfixes3 libxrender1 libxkbcommon0 \
             libwayland-client0 libwayland-cursor0 libwayland-egl1 \
-            libfontconfig1 mesa-utils
+            libfontconfig1 mesa-utils gdb
 
       # Published rather than built, because a plain build leaves the native libraries under
       # runtimes/linux-x64/native/ and Silk.NET asks the operating system for "libglfw.so.3" by name,
@@ -105,6 +105,11 @@ jobs:
             ./out/FractalZoom --explore --no-menu --no-hud --renderer cpu \
               --duration 6 --size 320x240 "$@"
           }
+          # TEMP: first render under gdb, to get a native backtrace for the segfault.
+          gdb -batch -ex "set confirm off" -ex run -ex "bt 40" -ex "info threads" \
+              --args ./out/FractalZoom --explore --no-menu --no-hud --renderer cpu \
+              --duration 6 --size 320x240 --fractal mandelbrot --snapshot field.png || true
+          ls -la field.png || echo "no field.png"
           run --fractal mandelbrot --snapshot field.png
           run --fractal koch       --snapshot drawn.png
           # This centre is not a round number and cannot be: at 1e13 the window is 1.3e-13 across, so
