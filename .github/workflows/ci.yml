@@ -29,8 +29,12 @@ jobs:
 
       # --help parses its arguments and returns before any window exists, so this runs anywhere,
       # including on a runner with no display at all.
+      #
+      # --no-launch-profile because otherwise `dotnet run` silently applies the first profile in
+      # launchSettings.json and prepends its arguments to these. Today that profile passes none;
+      # adding one above it would change what CI runs without touching this file.
       - name: Start the binary
-        run: dotnet run -c Release --no-build -- --help
+        run: dotnet run -c Release --no-build --no-launch-profile -- --help
 
   # Actually render something. A build that compiles and a build that draws are different claims,
   # and the second one is what this program is for.
@@ -48,10 +52,19 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Mesa alone is not enough. GLFW is a native library that links against the X11 client
+      # libraries, and if any of them is missing it simply fails to load — which surfaces as
+      # Silk.NET reporting "GlfwPlatform - not applicable", a message that sounds like a missing
+      # display and is actually a missing .so.
       - name: Install a software OpenGL stack
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libfontconfig1
+          sudo apt-get install -y \
+            xvfb \
+            libgl1 libglx-mesa0 libgl1-mesa-dri \
+            libx11-6 libxrandr2 libxinerama1 libxcursor1 libxi6 \
+            libxext6 libxfixes3 libxrender1 \
+            libfontconfig1
 
       - run: dotnet build -c Release
 
@@ -65,7 +78,7 @@ jobs:
           set -e
           run() {
             xvfb-run -a --server-args="-screen 0 640x480x24" \
-              dotnet run -c Release --no-build -- \
+              dotnet run -c Release --no-build --no-launch-profile -- \
                 --explore --no-menu --no-hud --renderer cpu \
                 --duration 6 --size 320x240 "$@"
           }
