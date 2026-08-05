@@ -71,7 +71,7 @@ but blank screens.
 --no-menu         skip the startup settings screen
 --duration N      exit after N seconds (default: run forever)
 --no-hud          hide the readout, for clean stills
---palette N       fix the gradient: 0 Electric, 1 Ember, 2 Aurora, 3 Abyss, 4 Copper
+--palette N       fix the gradient, 0 to 11 (see Colours below)
 --snapshot FILE   write the last frame to FILE as a PNG on exit
 ```
 
@@ -251,14 +251,43 @@ camera to you instead.
 
 ## Screenshots
 
-All four rendered in **Super crisp** mode (2× supersampled, four samples per pixel), one per colour
-gradient, captured with `--no-hud --quality 2 --speed 0.09`:
+Four of the twelve gradients, rendered in **Super crisp** mode (2× supersampled, four samples per
+pixel), captured with `--no-hud --quality 2 --speed 0.09`:
 
 | Electric | Ember |
 | --- | --- |
 | [![Electric](docs/electric.jpg)](docs/electric.jpg) | [![Ember](docs/ember.jpg)](docs/ember.jpg) |
 | **Aurora** | **Abyss** |
 | [![Aurora](docs/aurora.jpg)](docs/aurora.jpg) | [![Abyss](docs/abyss.jpg)](docs/abyss.jpg) |
+
+## Colours
+
+Twelve gradients, each four numbers a channel: `colour(t) = a + b·cos(2π·(c·t + d))`. That is a very
+small thing to hold a colour scheme in, and the reason every one of them is smooth and cyclic — which it
+has to be, since the colouring pass reads the palette at a wrapped coordinate and attenuates toward its
+*mean* wherever a pixel spans more than one cycle. A hand-picked list of stops would need its own
+interpolation and would have to be made to meet itself at both ends; a cosine already does.
+
+| | | |
+| --- | --- | --- |
+| **Electric** blue through gold | **Ember** black, red, amber, white | **Aurora** teal and magenta |
+| **Abyss** deep indigo to ice | **Copper** sepia with cyan highlights | **Spectrum** the whole hue circle |
+| **Fern** moss and bark | **Foundry** ink and rust, mostly dark | **Glacier** black to icy blue-white |
+| **Nebula** salmon, violet, deep blue, gold | **Bloom** red, teal, white — bands that differ | **Graphite** brightness only, no hue |
+
+The `c` coefficients are how many times a channel goes round per cycle. Left at one they keep the three
+in step, which gives the smooth two- and three-colour ramps; set to different whole numbers they beat
+against each other, which is where **Bloom** comes from — its successive bands are different colours
+rather than the same one repeating. That can be taken too far: an earlier twelfth entry ran the channels
+at one, two and three, and on a fractal's fine structure it read as noise rather than as colour. What
+replaced it goes the other way. **Graphite** has no hue at all, on the grounds that structure is easiest
+to read when only brightness is carrying it, and every coloured scheme hides some of the boundary in a
+hue the eye separates poorly.
+
+Names and menu entries are generated from the one table, so a new gradient appears in the settings screen
+by being added to it. Worth doing because the alternative had already gone wrong once: a hand-kept list
+of six fractal names against a table of twenty-six was an index out of range waiting to happen, and duly
+was.
 
 A centre crop at **1:1, no resampling** — actual output pixels, so the supersampling is visible rather
 than implied. Filaments hold their shape down to single pixels instead of breaking into speckle:

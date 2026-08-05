@@ -437,8 +437,9 @@ internal static class Program
                                             skipping wins instead. gpu or cpu pins it. G cycles.
                           --no-menu         skip the startup settings screen
                           --no-hud          hide the readout (for clean stills)
-                          --palette N       fix the gradient: 0 Electric, 1 Ember, 2 Aurora,
-                                            3 Abyss, 4 Copper (default: a new one per descent)
+                          --palette N       fix the gradient: 0 Electric, 1 Ember, 2 Aurora, 3 Abyss,
+                                            4 Copper, 5 Spectrum, 6 Fern, 7 Foundry, 8 Glacier,
+                                            9 Nebula, 10 Bloom, 11 Graphite (default: one per descent)
                           --freeze N        stop the camera once it reaches N magnification and
                                             keep re-rendering that one view, so kernel timings can
                                             be compared without the route varying between runs

@@ -73,7 +73,7 @@ internal sealed class SettingsScreen : IDisposable
         Choices = FractalNames(),
         Values = FractalValues(),
         Hint = "Twenty-six of them. Click the row, or press enter or F, to see the whole list;",
-        Hint2 = "the arrows step through it one at a time. Only the Mandelbrot zooms past ~1e13x.",
+        Hint2 = "the arrows step through it one at a time. The Mandelbrot and Julia reach 1e290x.",
     };
 
     private readonly Option _camera = new()
@@ -163,12 +163,26 @@ internal sealed class SettingsScreen : IDisposable
         Hint2 = "anything short of further editing.",
     };
 
+    /// <summary>
+    /// The gradient names with Cycle in front of them, and the matching values with -1 for Cycle.
+    /// Generated rather than written out, for the same reason the fractal list is: a hand-kept copy of
+    /// a list that grows is a list that will disagree with it, and this one is indexed by the value.
+    /// </summary>
+    private static string[] ColourNames() => ["Cycle", .. Mandelbrot.Gradient.Names()];
+
+    private static double[] ColourValues()
+    {
+        var values = new double[Mandelbrot.Gradient.All.Length + 1];
+        for (int i = 0; i < values.Length; i++) values[i] = i - 1;
+        return values;
+    }
+
     private readonly Option _colours = new()
     {
         Label = "Colours",
-        Choices = ["Cycle", "Electric", "Ember", "Aurora", "Abyss", "Copper"],
-        Values = [-1, 0, 1, 2, 3, 4],
-        Hint = "Cycle picks a new gradient for each descent.",
+        Choices = ColourNames(),
+        Values = ColourValues(),
+        Hint = "Cycle picks a new gradient for each descent; the rest hold one.",
     };
 
     private readonly Option _readout = new()

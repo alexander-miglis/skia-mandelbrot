@@ -1006,8 +1006,22 @@ internal static unsafe class Mandelbrot
         return (byte)(Math.Pow(v, 1.0 / 1.6) * 255.0 + 0.5); // gamma, so mid tones aren't muddy
     }
 
-    /// <summary>Coefficients of a cosine gradient: colour(t) = a + b * cos(2*pi*(c*t + d)).</summary>
+    /// <summary>
+    /// Coefficients of a cosine gradient: colour(t) = a + b * cos(2*pi*(c*t + d)).
+    ///
+    /// Four numbers a channel, which is a very small thing to hold a colour scheme in, and the reason
+    /// every one here is smooth and cyclic — it has to be, since <see cref="Colourise"/> reads the
+    /// palette at a wrapped coordinate and attenuates toward its mean where a pixel spans more than one
+    /// cycle of it. A hand-picked list of stops would need its own interpolation and would have to be
+    /// made to meet itself at both ends; a cosine already does.
+    ///
+    /// <see cref="CR"/> and its siblings are how many times a channel goes round per cycle. Leaving
+    /// them at one keeps the three channels in step and gives the smooth two- or three-colour ramps;
+    /// setting them to different whole numbers beats them against each other, which is where the
+    /// banded schemes at the end of the list come from.
+    /// </summary>
     internal readonly record struct Gradient(
+        string Name,
         double AR, double AG, double AB,
         double BR, double BG, double BB,
         double CR, double CG, double CB,
@@ -1015,16 +1029,42 @@ internal static unsafe class Mandelbrot
     {
         public static readonly Gradient[] All =
         [
-            // Electric — blue through gold
-            new(0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 1, 1, 1, 0.00, 0.10, 0.20),
-            // Ember — black, red, amber, white
-            new(0.50, 0.36, 0.22, 0.50, 0.38, 0.26, 1, 1, 1, 0.00, 0.12, 0.26),
-            // Aurora — teal and magenta
-            new(0.44, 0.50, 0.48, 0.38, 0.46, 0.42, 1, 1, 1, 0.36, 0.20, 0.06),
-            // Abyss — deep indigo to ice
-            new(0.30, 0.34, 0.52, 0.34, 0.36, 0.46, 1, 1, 1, 0.62, 0.55, 0.42),
-            // Copper — sepia with cyan highlights
-            new(0.48, 0.42, 0.34, 0.44, 0.40, 0.44, 1, 1, 1, 0.10, 0.06, 0.55),
+            // Blue through gold.
+            new("Electric", 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 1, 1, 1, 0.00, 0.10, 0.20),
+            // Black, red, amber, white.
+            new("Ember", 0.50, 0.36, 0.22, 0.50, 0.38, 0.26, 1, 1, 1, 0.00, 0.12, 0.26),
+            // Teal and magenta.
+            new("Aurora", 0.44, 0.50, 0.48, 0.38, 0.46, 0.42, 1, 1, 1, 0.36, 0.20, 0.06),
+            // Deep indigo to ice.
+            new("Abyss", 0.30, 0.34, 0.52, 0.34, 0.36, 0.46, 1, 1, 1, 0.62, 0.55, 0.42),
+            // Sepia with cyan highlights.
+            new("Copper", 0.48, 0.42, 0.34, 0.44, 0.40, 0.44, 1, 1, 1, 0.10, 0.06, 0.55),
+
+            // The three channels a third of a cycle apart, which is the whole spectrum in order.
+            new("Spectrum", 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 1, 1, 1, 0.00, 0.33, 0.67),
+            // Moss and bark: leaf green, olive, near-black, then a dark green.
+            new("Fern", 0.36, 0.44, 0.18, 0.34, 0.40, 0.16, 1, 1, 1, 0.92, 0.00, 0.10),
+            // Ink and rust. All three channels dip together, so most of the range is dark.
+            new("Foundry", 0.32, 0.22, 0.18, 0.34, 0.24, 0.20, 1, 1, 1, 0.00, 0.05, 0.12),
+            // Black up to an icy blue-white, blue leading.
+            new("Glacier", 0.34, 0.42, 0.52, 0.32, 0.36, 0.40, 1, 1, 1, 0.62, 0.58, 0.52),
+            // Salmon, violet, deep blue, gold.
+            new("Nebula", 0.48, 0.34, 0.46, 0.44, 0.30, 0.42, 1, 1, 1, 0.00, 0.15, 0.75),
+            // Red twice a cycle against blue once, which is the one scheme here whose bands do not all
+            // look alike: it comes round red, then teal, then white.
+            new("Bloom", 0.50, 0.48, 0.50, 0.48, 0.44, 0.48, 2, 1, 1, 0.50, 0.20, 0.25),
+            // Black to white with a cool cast, and no hue to speak of. The odd one out on purpose:
+            // structure is easiest to read when nothing but brightness is carrying it, and every
+            // coloured scheme hides some of the boundary in a hue the eye separates poorly.
+            new("Graphite", 0.50, 0.51, 0.55, 0.50, 0.50, 0.48, 1, 1, 1, 0.00, 0.01, 0.03),
         ];
+
+        /// <summary>The names, for the menu, so the two cannot fall out of step.</summary>
+        public static string[] Names()
+        {
+            var names = new string[All.Length];
+            for (int i = 0; i < names.Length; i++) names[i] = All[i].Name;
+            return names;
+        }
     }
 }
