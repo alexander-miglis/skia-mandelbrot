@@ -1274,7 +1274,10 @@ internal static class Program
                 $"{FractalKind.Of(_director.Kind).Name}   {_director.Magnification:0.000e+00}x   " +
                 $"explore   {mode}",
                 $"iter   {iterations}    fps {_fps,4:0}    kernel {_computeMs,5:0.0} ms on {where}",
-                $"render {kw}x{kh}   resample {_lastUpscale:0.00}x{(_paused ? "   [PAUSED]" : "")}{still}",
+                style == RenderStyle.Drawn
+                    ? $"drew {DrawnFractals.LastPieces}   visited {DrawnFractals.LastVisits}   " +
+                      $"depth {DrawnFractals.LastDepth}{(_paused ? "   [PAUSED]" : "")}{still}"
+                    : $"render {kw}x{kh}   resample {_lastUpscale:0.00}x{(_paused ? "   [PAUSED]" : "")}{still}",
                 "scroll zoom at pointer   drag pan   P save still   R whole set   E auto   esc menu",
             ]
             :

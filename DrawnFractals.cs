@@ -56,6 +56,34 @@ internal static class DrawnFractals
     private static int _budget;
 
     /// <summary>
+    /// Nodes a frame may *examine*, as opposed to draw. The two need separate limits: reaching a
+    /// deeply zoomed view means descending past a great many candidates that are culled the moment
+    /// they are tested, and charging those to the drawing budget meant it could be spent entirely on
+    /// rejected nodes before the first circle worth drawing was reached — which looks exactly like
+    /// the fractal refusing to draw past a certain zoom.
+    /// </summary>
+    private const int VisitBudget = 600_000;
+
+    private static int _visits;
+
+    /// <summary>
+    /// What the last frame actually did, for the readout. When one of these fractals stops drawing,
+    /// these three numbers say why without having to guess: pieces at its ceiling means the drawing
+    /// budget ran out, visits at its ceiling means the search did, depth at 140 means the recursion
+    /// limit, and all three small means the view is simply somewhere the fractal is not.
+    /// </summary>
+    public static int LastPieces { get; private set; }
+
+    public static int LastVisits { get; private set; }
+
+    public static int LastDepth { get; private set; }
+
+    private static void Reached(int depth)
+    {
+        if (depth > LastDepth) LastDepth = depth;
+    }
+
+    /// <summary>
     /// Collects segments into one path per recursion depth, so a rule that emits thousands of little
     /// lines costs a handful of draw calls instead of thousands.
     ///
@@ -139,6 +167,8 @@ internal static class DrawnFractals
     {
         var frame = new Frame(centerX, centerY, scale, width, height);
         _budget = PieceBudget;
+        _visits = VisitBudget;
+        LastDepth = 0;
 
         // Colour comes from the same gradient the fields use, sampled by recursion depth, so a
         // switch of fractal does not also mean a switch of palette.
@@ -159,6 +189,9 @@ internal static class DrawnFractals
             case Fractal.FractalTree: Tree(canvas, paint, palette, frame); break;
             default: Hilbert(canvas, paint, palette, frame); break;
         }
+
+        LastPieces = PieceBudget - _budget;
+        LastVisits = VisitBudget - _visits;
     }
 
     private static SKColor Shade(Mandelbrot.Palette palette, int depth)
@@ -349,7 +382,10 @@ internal static class DrawnFractals
         // circles you are looking at after zooming in a few thousand times are fifty or more levels
         // down — a cap of twenty-four meant the gasket simply stopped being drawn once you went past
         // what it could reach. What bounds the work is the pixel test below, not the depth.
-        if (depth >= 140 || _budget-- <= 0) return;
+        // Charged against the visit budget, not the drawing one: most of these are rejected two lines
+        // below and cost nothing to draw.
+        if (depth >= 140 || _visits-- <= 0) return;
+        Reached(depth);
 
         var next = Circ.Reflect(a, b, c, d);
         if (next.K <= 0 || double.IsNaN(next.K)) return;
@@ -361,7 +397,7 @@ internal static class DrawnFractals
         // the circle alone would prune subtrees whose own circles are still on screen.
         if (!frame.Visible(next.X, next.Y, next.X, next.Y, radius * 3.0)) return;
 
-        Circle(canvas, paint, palette, frame, next, depth);
+        if (_budget-- > 0) Circle(canvas, paint, palette, frame, next, depth);
 
         Gap(canvas, paint, palette, frame, b, c, next, a, depth + 1);
         Gap(canvas, paint, palette, frame, a, c, next, b, depth + 1);
