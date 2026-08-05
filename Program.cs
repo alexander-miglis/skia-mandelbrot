@@ -556,6 +556,17 @@ internal static class Program
     /// </summary>
     private static void SetUpGpu()
     {
+        // Pinned to the processor means the card's kernel is never going to be asked for anything, so
+        // it is not built either. Building it is not free and not harmless: it compiles fp64 shaders,
+        // and a software rasteriser asked to do that can take the process down with it, which is how
+        // this first showed up — headless CI, told to use the CPU, segfaulting inside a GPU kernel it
+        // had been told not to use.
+        if (_backend == Backend.Cpu)
+        {
+            _gpuUnavailable = "pinned to the processor with --renderer cpu";
+            return;
+        }
+
         if (_gpuUnavailable is not null) { Report(); return; }
 
         try
