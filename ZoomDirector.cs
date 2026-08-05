@@ -15,18 +15,36 @@ namespace FractalZoom;
 internal sealed class ZoomDirector
 {
     /// <summary>
-    /// Where the pixel deltas themselves stop being representable as doubles (min normal is
-    /// ~1e-308), which is the real end of the road for this arithmetic.
+    /// Where a view stops resolving: for the Mandelbrot, where the pixel deltas themselves stop
+    /// being representable as doubles, which is the real end of the road for this arithmetic; for
+    /// the formulas without a perturbed form, where plain doubles give out instead.
     /// </summary>
-    private const double ScaleFloor = 1e-290;
+    private double ScaleFloor => FractalKind.Of(Kind).Floor;
 
     /// <summary>View scale below which plain doubles stop resolving neighbouring pixels.</summary>
     private const double PerturbBelow = 1e-11;
 
-    private const double StartScale = 1.4;
-    private const double StartX = -0.6;
-    private const double StartY = 0.0;
     private const double FadeSeconds = 0.9;
+
+    /// <summary>Which formula is being explored. Changing it starts a fresh view of the new one.</summary>
+    public Fractal Kind { get; private set; } = Fractal.Mandelbrot;
+
+    private double StartScale => FractalKind.Of(Kind).Scale;
+    private double StartX => FractalKind.Of(Kind).CenterX;
+    private double StartY => FractalKind.Of(Kind).CenterY;
+
+    /// <summary>
+    /// Switches formula and starts over on it. Each one has its own opening view, because the
+    /// interesting part of a Burning Ship is nowhere near the interesting part of a Mandelbrot.
+    /// </summary>
+    public void SetKind(Fractal kind, bool interactive)
+    {
+        if (kind == Kind) return;
+
+        Kind = kind;
+        if (interactive) ResetToOverview();
+        else { Cycle++; Reset(); }
+    }
 
     private readonly Random _rng;
 
@@ -96,6 +114,20 @@ internal sealed class ZoomDirector
         _rng = new Random(seed);
         Reset();
     }
+
+    /// <summary>
+    /// Hands the camera to the host. The director stops steering — no zooming, no re-aiming, no
+    /// ending the descent — and keeps only the two jobs that cannot move outside it: fading a fresh
+    /// view in, and keeping the reference orbit fit for wherever the camera has been taken.
+    /// </summary>
+    public bool Interactive { get; set; }
+
+    /// <summary>
+    /// How far out the camera may be pulled interactively. A little wider than the opening view, so
+    /// the whole set can sit inside the window with a margin, and no further: past that there is
+    /// nothing to look at but a receding dot.
+    /// </summary>
+    private double MaxInteractiveScale => StartScale * 3.0;
 
     /// <summary>Non-null once the view is too deep for plain doubles.</summary>
     public ReferenceOrbit? Reference { get; private set; }
@@ -174,8 +206,68 @@ internal sealed class ZoomDirector
         Generation++;
     }
 
+    /// <summary>
+    /// Puts the camera back on the whole set — the view a Mandelbrot picture usually opens on, which
+    /// the automatic descent deliberately skips past. No opening fast-forward: that exists because a
+    /// descent should not spend its first seconds on the featureless outer gradient, and someone
+    /// steering by hand wants to start from the map.
+    /// </summary>
+    public void ResetToOverview()
+    {
+        Reference = null;
+        OffsetX = StartX;
+        OffsetY = StartY;
+        Scale = StartScale;
+        _tdx = 0;
+        _tdy = 0;
+        _retargetAt = 0;
+        _rebuildAt = 0;
+        _phase = Phase.FadeIn;
+        Fade = 0;
+        _needsOpening = false;
+        _exhausted = false;
+        Generation++;
+    }
+
+    /// <summary>
+    /// Scales the view by <paramref name="factor"/> (above 1 zooms in) while holding one point
+    /// still: the one at (<paramref name="anchorX"/>, <paramref name="anchorY"/>), given as an
+    /// offset from the view centre in complex-plane units. That is what makes a wheel zoom land
+    /// where the pointer is rather than wherever the middle of the window happens to be.
+    /// </summary>
+    public void ZoomAbout(double factor, double anchorX, double anchorY)
+    {
+        if (!(factor > 0) || double.IsNaN(factor)) return;
+
+        double wanted = Math.Clamp(Scale / factor, ScaleFloor, MaxInteractiveScale);
+        double applied = Scale / wanted;
+        if (applied == 1.0) return;
+
+        // The anchor keeps its complex coordinate, so the centre has to travel the fraction of the
+        // way to it that the zoom removed.
+        double pull = 1.0 - 1.0 / applied;
+        OffsetX += anchorX * pull;
+        OffsetY += anchorY * pull;
+        Scale = wanted;
+    }
+
+    /// <summary>Slides the view by a complex-plane offset. Both coordinate modes take it unchanged.</summary>
+    public void PanBy(double dx, double dy)
+    {
+        OffsetX += dx;
+        OffsetY += dy;
+    }
+
     public void Advance(double dt, double aspect)
     {
+        if (Interactive)
+        {
+            MaintainReference(aspect);
+            if (Fade < 1.0) Fade = Math.Min(1.0, Fade + dt / FadeSeconds);
+            _phase = Fade >= 1.0 ? Phase.Zoom : Phase.FadeIn;
+            return;
+        }
+
         if (_needsOpening)
         {
             _needsOpening = false;
@@ -219,6 +311,38 @@ internal sealed class ZoomDirector
                     Reset();
                 }
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Keeps the reference orbit matched to a camera the director is not driving.
+    ///
+    /// Rebuilt on the way down at the same intervals the automatic descent uses, and anchored on the
+    /// view centre rather than on a hill-climbed interior point — there is no target to climb toward
+    /// here. Dropped again on the way back up, because a reference anchored decades deeper would be
+    /// asked for deltas far larger than it was built for, and above the threshold plain doubles
+    /// resolve the view anyway.
+    /// </summary>
+    private void MaintainReference(double aspect)
+    {
+        if (!FractalKind.Of(Kind).Perturbable) return;
+
+        if (Scale < PerturbBelow)
+        {
+            if (Reference is null || Scale <= _rebuildAt)
+            {
+                RebuildReference(0, 0, aspect);
+                _rebuildAt = Scale * RebuildStep;
+            }
+        }
+        else if (Reference is { } reference)
+        {
+            // Back to absolute coordinates. Lossless enough by definition: this only happens above
+            // the scale where doubles stop separating neighbouring pixels.
+            OffsetX += reference.CenterX.ToDouble();
+            OffsetY += reference.CenterY.ToDouble();
+            Reference = null;
+            _rebuildAt = 0;
         }
     }
 
@@ -274,7 +398,7 @@ internal sealed class ZoomDirector
     private bool SampleEscape(double dx, double dy, int maxIter, out double smooth) =>
         Reference is not null
             ? Reference.Escape(OffsetX + dx, OffsetY + dy, maxIter, out smooth)
-            : Mandelbrot.Escape(OffsetX + dx, OffsetY + dy, maxIter, out smooth);
+            : Mandelbrot.Escape(OffsetX + dx, OffsetY + dy, maxIter, Kind, out smooth);
 
     /// <summary>
     /// Chooses the next point to fly toward, and notes an interior sample to anchor the next
@@ -324,7 +448,7 @@ internal sealed class ZoomDirector
         _tdy = y;
         ClampTarget(aspect);
 
-        if (Scale < PerturbBelow && (Reference is null || Scale <= _rebuildAt))
+        if (FractalKind.Of(Kind).Perturbable && Scale < PerturbBelow && (Reference is null || Scale <= _rebuildAt))
         {
             RebuildReference(_tdx, _tdy, aspect);
             _rebuildAt = Scale * RebuildStep;
@@ -416,7 +540,7 @@ internal sealed class ZoomDirector
         _tdy = bestY;
         ClampTarget(aspect);
 
-        if (Scale < PerturbBelow && (Reference is null || Scale <= _rebuildAt))
+        if (FractalKind.Of(Kind).Perturbable && Scale < PerturbBelow && (Reference is null || Scale <= _rebuildAt))
         {
             RebuildReference(haveInterior ? interiorX : _tdx, haveInterior ? interiorY : _tdy, aspect);
             _rebuildAt = Scale * RebuildStep;
@@ -492,6 +616,6 @@ internal sealed class ZoomDirector
         double dcMax = 2.0 * Scale * Math.Sqrt(aspect * aspect + 1.0);
 
         // Margin so the orbit still covers the iteration budget at the next re-aim, twice as deep.
-        Reference = ReferenceOrbit.Compute(cx, cy, (int)(MaxIterations * 1.6) + 64, dcMax);
+        Reference = ReferenceOrbit.Compute(cx, cy, (int)(MaxIterations * 1.6) + 64, dcMax, Kind);
     }
 }
