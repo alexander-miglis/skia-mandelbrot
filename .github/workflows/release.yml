@@ -111,5 +111,5 @@ jobs:
           | | |
           | --- | --- |
           | **Windows** | \`fractal-zoom-windows-x64.zip\` — unzip, run \`FractalZoom.exe\`. |
-          | **macOS** | \`-macos-apple-silicon.tar.gz\`. Apple Silicon only. Unsigned, so the first run needs \`xattr -dr com.apple.quarantine FractalZoom\`. |
+          | **macOS** | \`-macos-apple-silicon.tar.gz\` (Apple Silicon). Unsigned, so Gatekeeper blocks the first run — on macOS 15 the dialog offers only *Move to Trash* or *Done*. Either run \`xattr -dr com.apple.quarantine FractalZoom\`, or press Done and allow it in System Settings → Privacy & Security → **Open Anyway**. |
           | **Linux** | \`-linux-x64.tar.gz\`. Needs \`libfontconfig1\`, the X11 client libraries and a GL driver. |"

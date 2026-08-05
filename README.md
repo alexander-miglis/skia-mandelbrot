@@ -22,8 +22,12 @@ them in.
 | | |
 | --- | --- |
 | **Windows** | `fractal-zoom-windows-x64.zip` — unzip, run `FractalZoom.exe`. |
-| **macOS** | `fractal-zoom-macos-apple-silicon.tar.gz`. Apple Silicon only. Unsigned, so the first run needs `xattr -dr com.apple.quarantine FractalZoom`. |
+| **macOS** | `fractal-zoom-macos-apple-silicon.tar.gz` (Apple Silicon). Unsigned, so Gatekeeper refuses it on first run with *"Apple could not verify FractalZoom is free of malware"* — on macOS 15 that dialog offers only **Move to Trash** or **Done**, with no way through it. Two ways past, either is fine:<br>• Terminal: `xattr -dr com.apple.quarantine FractalZoom`<br>• Or press **Done**, then System Settings → Privacy & Security → scroll down → **Open Anyway**. |
 | **Linux** | `fractal-zoom-linux-x64.tar.gz`. Needs `libfontconfig1` and a GL driver; on a bare container also `libgl1-mesa-dri`. |
+
+The block is about notarisation, not the build: the binary is ad-hoc signed, and once the quarantine
+flag is off it runs normally. Getting rid of the warning entirely needs a paid Apple Developer ID and
+a notarisation step in CI, which this does not have.
 
 About 40 MB each, because the .NET runtime and Skia are in there. If you would rather build it
 yourself, that is one command:
