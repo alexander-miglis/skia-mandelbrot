@@ -1,7 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!--
+      WinExe, not Exe: a console-subsystem process gets a console window of its own on Windows, which
+      for a double-clicked graphical program is a black rectangle sitting behind it doing nothing.
+      This costs nothing on macOS and Linux, where the distinction does not exist, and the readout
+      still reaches a terminal that starts it — see AttachToTerminal in Program.cs.
+    -->
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
@@ -268,6 +269,7 @@ internal static class Program
 
     private static void Main(string[] args)
     {
+        AttachToTerminal();
         if (!ParseArgs(args)) return;
 
         // The kernel shaders iterate in double precision, which needs a 4.0 context; everything
@@ -281,6 +283,31 @@ internal static class Program
                 throw new InvalidOperationException("Could not create an OpenGL window.");
         }
     }
+
+    /// <summary>
+    /// Puts the readout back on the terminal that started this, if one did.
+    ///
+    /// The project builds for the windows subsystem so that double-clicking it does not also open a
+    /// console window nobody asked for. The cost of that is a process with no console at all, so a
+    /// run from a shell would print `--help` and the closing summary into nowhere — this reattaches
+    /// to the console the shell already owns and points the standard streams at it.
+    ///
+    /// Not done when the output is redirected: a pipe or a file is a perfectly good place for the
+    /// output to be going already, and taking it over would send it somewhere else instead.
+    /// </summary>
+    private static void AttachToTerminal()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        if (Console.IsOutputRedirected || Console.IsErrorRedirected) return;
+        if (!AttachConsole(-1)) return;   // -1 is the parent process; fails when it has no console
+
+        Console.SetOut(new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true });
+        Console.SetError(new StreamWriter(Console.OpenStandardError()) { AutoFlush = true });
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AttachConsole(int processId);
 
     /// <summary>
     /// Opens the window at the given GL version and runs until it closes. False means the context

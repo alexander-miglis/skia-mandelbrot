@@ -67,7 +67,12 @@ jobs:
             libwayland-client0 libwayland-cursor0 libwayland-egl1 \
             libfontconfig1 mesa-utils
 
-      - run: dotnet build -c Release
+      # Published rather than built, because a plain build leaves the native libraries under
+      # runtimes/linux-x64/native/ and Silk.NET asks the operating system for "libglfw.so.3" by name,
+      # which finds nothing there. Publishing flattens them next to the binary. It is also the layout
+      # people download, so this exercises the one that matters.
+      - name: Publish
+        run: dotnet publish FractalZoom.csproj -c Release -r linux-x64 --self-contained false -o out
 
       # A display for the whole job rather than one wrapped around each command, so that what the
       # renderer sees is visible here too. Silk.NET reports a native library that will not load and a
@@ -82,7 +87,7 @@ jobs:
 
       - name: Check GLFW can load and GL can run
         run: |
-          so=$(find . -name 'libglfw*so*' | head -1)
+          so=$(find out -name 'libglfw*so*' | head -1)
           echo "glfw: $so"
           ldd "$so" 2>/dev/null | grep -i "not found" || echo "  (no missing libraries)"
           echo "DISPLAY=$DISPLAY"
@@ -97,8 +102,7 @@ jobs:
         run: |
           set -e
           run() {
-            dotnet run -c Release --no-build --no-launch-profile -- \
-              --explore --no-menu --no-hud --renderer cpu \
+            ./out/FractalZoom --explore --no-menu --no-hud --renderer cpu \
               --duration 6 --size 320x240 "$@"
           }
           run --fractal mandelbrot --snapshot field.png
