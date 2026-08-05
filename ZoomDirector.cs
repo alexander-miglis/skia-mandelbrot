@@ -261,7 +261,7 @@ internal sealed class ZoomDirector
     public void GoTo(Dd x, Dd y, double magnification)
     {
         ResetToOverview();
-        Scale = Math.Clamp(StartScale / Math.Max(1.0, magnification), ScaleFloor, MaxInteractiveScale);
+        Scale = Math.Clamp(StartScale / Math.Max(0.01, magnification), ScaleFloor, MaxInteractiveScale);
 
         if (FractalKind.Of(Kind).Perturbable)
         {

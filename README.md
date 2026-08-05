@@ -249,6 +249,65 @@ the only way to see past 1e13×.
 The automatic descent needs escape times to steer by, so the drawn and ray-marched ones hand the
 camera to you instead.
 
+## Every fractal
+
+All twenty-six, in the Electric gradient at 800×500, straight out of `--snapshot`. Most are the view
+each one opens on; the rest are noted below.
+
+**Fields** — a number per pixel, through the two-pass kernel and its band-limited colouring.
+
+| | | |
+| --- | --- | --- |
+| [![Mandelbrot](docs/gallery/mandelbrot.jpg)](docs/gallery/mandelbrot.jpg)<br>**Mandelbrot** | [![Julia](docs/gallery/julia.jpg)](docs/gallery/julia.jpg)<br>**Julia** | [![Burning Ship](docs/gallery/burning-ship.jpg)](docs/gallery/burning-ship.jpg)<br>**Burning Ship** |
+| [![Tricorn](docs/gallery/tricorn.jpg)](docs/gallery/tricorn.jpg)<br>**Tricorn** | [![Multibrot](docs/gallery/multibrot.jpg)](docs/gallery/multibrot.jpg)<br>**Multibrot** | [![Phoenix](docs/gallery/phoenix.jpg)](docs/gallery/phoenix.jpg)<br>**Phoenix** |
+| [![Newton](docs/gallery/newton.jpg)](docs/gallery/newton.jpg)<br>**Newton** | [![Nova](docs/gallery/nova.jpg)](docs/gallery/nova.jpg)<br>**Nova** | [![Magnet](docs/gallery/magnet.jpg)](docs/gallery/magnet.jpg)<br>**Magnet** |
+| [![Lyapunov](docs/gallery/lyapunov.jpg)](docs/gallery/lyapunov.jpg)<br>**Lyapunov** | [![Pickover Stalks](docs/gallery/pickover-stalks.jpg)](docs/gallery/pickover-stalks.jpg)<br>**Pickover Stalks** | [![Orbit Trap](docs/gallery/orbit-trap.jpg)](docs/gallery/orbit-trap.jpg)<br>**Orbit Trap** |
+| [![Sierpiński Triangle](docs/gallery/sierpinski-triangle.jpg)](docs/gallery/sierpinski-triangle.jpg)<br>**Sierpiński Triangle** | [![Sierpiński Carpet](docs/gallery/sierpinski-carpet.jpg)](docs/gallery/sierpinski-carpet.jpg)<br>**Sierpiński Carpet** |  |
+
+**Drawn** — geometry through Skia, no kernel at all.
+
+| | | |
+| --- | --- | --- |
+| [![Koch Snowflake](docs/gallery/koch-snowflake.jpg)](docs/gallery/koch-snowflake.jpg)<br>**Koch Snowflake** | [![Dragon Curve](docs/gallery/dragon-curve.jpg)](docs/gallery/dragon-curve.jpg)<br>**Dragon Curve** | [![Barnsley Fern](docs/gallery/barnsley-fern.jpg)](docs/gallery/barnsley-fern.jpg)<br>**Barnsley Fern** |
+| [![Apollonian Gasket](docs/gallery/apollonian-gasket.jpg)](docs/gallery/apollonian-gasket.jpg)<br>**Apollonian Gasket** | [![Fractal Tree](docs/gallery/fractal-tree.jpg)](docs/gallery/fractal-tree.jpg)<br>**Fractal Tree** | [![L-System (Hilbert)](docs/gallery/l-system-hilbert.jpg)](docs/gallery/l-system-hilbert.jpg)<br>**L-System (Hilbert)** |
+
+**Ray-marched** — a distance estimator on the card, lit by its own gradient. Here the pan is an orbit
+and the zoom is a camera distance, so all six need a camera before they show anything: at the default
+angle of `0,0` the Kleinian and the Mandelbox both render very nearly black, which is what the first
+pass of this gallery looked like.
+
+| | | |
+| --- | --- | --- |
+| [![Mandelbulb](docs/gallery/mandelbulb.jpg)](docs/gallery/mandelbulb.jpg)<br>**Mandelbulb** | [![Mandelbox](docs/gallery/mandelbox.jpg)](docs/gallery/mandelbox.jpg)<br>**Mandelbox** | [![Menger Sponge](docs/gallery/menger-sponge.jpg)](docs/gallery/menger-sponge.jpg)<br>**Menger Sponge** |
+| [![Sierpiński Tetrahedron](docs/gallery/sierpinski-tetrahedron.jpg)](docs/gallery/sierpinski-tetrahedron.jpg)<br>**Sierpiński Tetrahedron** | [![Quaternion Julia](docs/gallery/quaternion-julia.jpg)](docs/gallery/quaternion-julia.jpg)<br>**Quaternion Julia** | [![Kleinian](docs/gallery/kleinian.jpg)](docs/gallery/kleinian.jpg)<br>**Kleinian** |
+
+Reproducing any of them:
+
+```bash
+dotnet run -c Release -- --explore --no-menu --no-hud --palette 0 \
+    --fractal mandelbrot --duration 3 --size 800x500 --snapshot out.jpg
+```
+
+`--explore` is the part that matters: without it the camera is the director's and three seconds in it is
+already descending, so what you get is somewhere deep rather than the view the fractal opens on. Add a
+camera for these:
+
+```bash
+--fractal burning       --center -1.75,0.03 --zoom 12    # the ship, rather than one bulb of it
+--fractal tricorn       --center 0,0        --zoom 0.7    # far enough out for all three corners
+--fractal "sierpinski t" --zoom 1.6                      # the unit square, filling the frame
+--fractal "sierpinski c" --zoom 1.6
+--fractal mandelbulb    --center 0.6,0.4   --zoom 1.6
+--fractal mandelbox     --center 2.2,0.8   --zoom 0.5
+--fractal menger        --center 4.0,0.25  --zoom 2.6
+--fractal "sierpinski te" --center 0.6,0.4 --zoom 1.6
+--fractal quaternion    --center 0.6,0.4   --zoom 4
+--fractal kleinian      --center 0.6,0.4   --zoom 1
+```
+
+`--zoom` below 1 pulls the camera back rather than in, which is what the Mandelbox wanted — as far out
+as the wheel scrolls, three times the opening view.
+
 ## Screenshots
 
 Four of the twelve gradients, rendered in **Super crisp** mode (2× supersampled, four samples per

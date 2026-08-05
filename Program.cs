@@ -392,8 +392,11 @@ internal static class Program
                                      && ParseWide(cxs) is { } cx && ParseWide(cys) is { } cy:
                     _startCenter = (cx, cy);
                     break;
+                // Below 1 pulls back rather than in, as far as the wheel can be scrolled out — which for
+                // the ray-marched fractals is the difference between an object filling the frame and a
+                // speck in the middle of it, since there the zoom is a camera distance.
                 case "--zoom" when double.TryParse(Next(), Invariant, Culture, out double mag):
-                    _startZoom = Math.Max(1.0, mag);
+                    _startZoom = Math.Max(0.34, mag);
                     break;
                 case "--snapshot" when Next() is { Length: > 0 } path:
                     _snapshotPath = path;
@@ -444,7 +447,8 @@ internal static class Program
                                             keep re-rendering that one view, so kernel timings can
                                             be compared without the route varying between runs
                           --duration N      exit after N seconds (default: run forever)
-                          --snapshot FILE   write the last frame to FILE as a PNG on exit
+                          --snapshot FILE   write the last frame to FILE on exit; .jpg or .jpeg for a
+                                            JPEG, anything else for a PNG
 
                         Keys: esc/tab settings  space pause  R new descent / reset view
                               E explore  F fractals  P save a still  G gpu/cpu  H readout
@@ -506,12 +510,12 @@ internal static class Program
         if (_explore) _director.ResetToOverview();
 
         // A view given on the command line is a hand-steered one, so it comes with the camera.
-        if (_startCenter is { } start || _startZoom > 1.0)
+        if (_startCenter is { } start || _startZoom > 0.0)
         {
             SetExplore(true);
             var kind = FractalKind.Of(_director.Kind);
             var (atX, atY) = _startCenter ?? (new Dd(kind.CenterX), new Dd(kind.CenterY));
-            _director.GoTo(atX, atY, _startZoom > 1.0 ? _startZoom : 1.0);
+            _director.GoTo(atX, atY, _startZoom > 0.0 ? _startZoom : 1.0);
         }
 
         RecreateSurface();
@@ -1206,9 +1210,16 @@ internal static class Program
 
     private static void SaveSnapshot(string path)
     {
+        // The extension picks the format, so a gallery of these can be written straight to the size it
+        // wants to be. Truncating rather than just opening: a JPEG of the same view is a fraction of
+        // the length of the PNG that may already be there, and OpenWrite would leave the tail of it.
+        bool jpeg = path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+                    || path.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase);
+
         using var image = _surface!.Snapshot();
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        using var stream = System.IO.File.OpenWrite(path);
+        using var data = image.Encode(jpeg ? SKEncodedImageFormat.Jpeg : SKEncodedImageFormat.Png,
+            jpeg ? 90 : 100);
+        using var stream = System.IO.File.Create(path);
         data.SaveTo(stream);
         Console.WriteLine($"Wrote {path}");
     }
