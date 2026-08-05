@@ -65,7 +65,7 @@ jobs:
             libx11-6 libxrandr2 libxinerama1 libxcursor1 libxi6 \
             libxext6 libxfixes3 libxrender1 libxkbcommon0 \
             libwayland-client0 libwayland-cursor0 libwayland-egl1 \
-            libfontconfig1
+            libfontconfig1 mesa-utils
 
       - run: dotnet build -c Release
 
@@ -97,10 +97,9 @@ jobs:
         run: |
           set -e
           run() {
-            xvfb-run -a --server-args="-screen 0 640x480x24" \
-              dotnet run -c Release --no-build --no-launch-profile -- \
-                --explore --no-menu --no-hud --renderer cpu \
-                --duration 6 --size 320x240 "$@"
+            dotnet run -c Release --no-build --no-launch-profile -- \
+              --explore --no-menu --no-hud --renderer cpu \
+              --duration 6 --size 320x240 "$@"
           }
           run --fractal mandelbrot --snapshot field.png
           run --fractal koch       --snapshot drawn.png
