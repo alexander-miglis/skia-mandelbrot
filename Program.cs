@@ -531,8 +531,16 @@ internal static class Program
     {
         _gl = GL.GetApi(_window);
 
-        _glInterface = GRGlInterface.Create(name =>
-            _window.GLContext!.TryGetProcAddress(name, out nint addr) ? addr : IntPtr.Zero);
+        // Skia's own loader first, and only then the window's.
+        //
+        // Handing Skia a managed callback to resolve entry points segfaults inside
+        // GrGLExtensions::init on Mesa/llvmpipe — before any of this program's own code runs, which
+        // is why pinning the kernel to the processor did not avoid it. Skia's native loader takes
+        // the same route the driver expects and does not crash there. The callback stays as a
+        // fallback for anywhere the native loader declines to build an interface.
+        _glInterface = GRGlInterface.Create()
+                       ?? GRGlInterface.Create(name =>
+                              _window.GLContext!.TryGetProcAddress(name, out nint addr) ? addr : IntPtr.Zero);
         _grContext = GRContext.CreateGl(_glInterface)
             ?? throw new InvalidOperationException("Could not create a Skia GPU context.");
 
