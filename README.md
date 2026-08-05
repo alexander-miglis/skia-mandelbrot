@@ -156,10 +156,37 @@ tangent to **2.3e-14** relative (a floor inherited from the starting quadruple, 
 invisible at any zoom) down to circles of radius 1e-23, degrading past that exactly as `Dd`'s 1e-32
 absolute precision predicts.
 
-The fern is the odd one out. It has nothing to find by going deeper — zoom into it and you find another
-fern, the same fern, forever — so what varies over time is its **shape**: a slow shear on the one map
-that carries the stem, which is applied over and over and so compounds all the way up, bending every
-frond a little more than the one below.
+The fern is the odd one out, in three ways.
+
+It is drawn by **throwing points** — pick a map by its weight, apply it, plot where you land — which is
+how a fern is normally drawn and much the cheapest thing here: one multiply-add a point, no recursion,
+and the density comes out as the shading. Nothing else looks as much like a fern. What it cannot do is
+zoom, since a random point lands in a window a billionth of the fern across about a billionth of the
+time, and it fails in a way that measures itself: it simply stops producing any. So the count decides,
+and past that the fern is walked as **nested boxes** instead, at a couple of pixels' detail, each point
+drawn the size of the box it stands for so the cover reads evenly however the branches divided.
+
+That walk had a bug worth recording, because it is easy to write and looks almost right. It descended by
+applying each new map on the *outside*, which is the order the iteration itself runs in — but
+`m(parent)` is not inside `parent`, so a node does not contain its own descendants and culling it throws
+away pieces that are on screen. A deep view of the fern's tip drew a single point: the nested pieces
+around the tip all lived in sibling subtrees, every one culled at the first level for being nowhere near
+it. What descends now is the composed transform with each new map applied on the *inside*, which is the
+only arrangement in which a child's box lies within its parent's.
+
+It is **coloured like a plant** rather than from the shared gradient, and which part is which comes
+straight out of the rule: one of the four maps flattens the whole fern onto a vertical segment, and that
+segment is the stem, so a point is on a stem if its recent history includes that map. How recently says
+which one — applied last it gives the main stem, one map ago the midribs of the three fronds, two ago
+their sub-fronds. Three generations of that is brown and the rest is leaf, which is how a fern is built.
+
+And it has nothing to find by going deeper — zoom in and you find another fern, the same fern, forever —
+so what varies over time is its **shape**: a slow shear on the one map that carries the stem, applied
+over and over and so compounding all the way up, bending every frond a little more than the one below.
+How far it may lean before the frond leaves the window is exact rather than a guess, since the tip is
+that map's fixed point: solving `(I − M)·p = t` for the sheared `M` says where the tip lands, and setting
+that equal to the edge of the view gives the most the fern can lean and stay in frame. In a tall narrow
+window that is hardly at all, because the upright fern already nearly fills the width.
 
 **Ray-marched** — a distance estimator per fractal, marched on the card and lit by its own gradient:
 Mandelbulb, Mandelbox, Menger Sponge, Sierpiński Tetrahedron, Quaternion Julia, Kleinian. These need

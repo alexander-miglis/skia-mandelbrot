@@ -52,10 +52,13 @@ internal static class DrawnFractals
     private const int PieceBudget = 45_000;
 
     /// <summary>
-    /// Points the fern and the Hilbert curve may plot. Higher than <see cref="PieceBudget"/> because
-    /// a point costs a coordinate pair in one batched call rather than a stroke of its own.
+    /// Points the fern and the Hilbert curve may plot. Far higher than <see cref="PieceBudget"/>
+    /// because a point costs a coordinate pair in one batched call rather than a stroke of its own —
+    /// and it needs to be, since covering a window with a shape that nearly fills its own outline
+    /// takes points in proportion to the window's *area*: a fern the height of a tall screen wants
+    /// several hundred thousand of them before it stops looking stippled.
     /// </summary>
-    private const int PointBudget = 160_000;
+    private const int PointBudget = 420_000;
 
     /// <summary>
     /// What the last frame actually did, for the readout. When one of these fractals stops drawing,
@@ -200,7 +203,7 @@ internal static class DrawnFractals
     }
 
     /// <param name="phase">
-    /// Seconds of animation elapsed. Only the fern uses it, to lean � see <see cref="Maps"/>.
+    /// Seconds of animation elapsed. Only the fern uses it, to lean � see <see cref="Maps"/>.
     /// </param>
     public static void Draw(
         SKCanvas canvas, Fractal kind, Dd centerX, Dd centerY, double scale,
@@ -420,6 +423,23 @@ internal static class DrawnFractals
         new(0.85, 0.04, -0.04, 0.85, 0.00, 1.60),
     ];
 
+    /// <summary>
+    /// How far the fern may lean before the tip of its frond leaves the window, given where the edge
+    /// of the view is.
+    ///
+    /// Exact rather than a guess, because the tip is the fixed point of the stem map: solving
+    /// (I − M)·p = t for the sheared M puts it at 1.6·(0.04 + s) / (0.0241 + 0.04·s), and setting that
+    /// equal to the edge and solving back for s gives the most the fern can lean and stay in frame.
+    /// In a tall narrow window that is hardly at all — the upright fern already nearly fills the width,
+    /// so a lean has nowhere to go — and in a wide one it is as much as the map will take while still
+    /// contracting.
+    /// </summary>
+    private static double LeanRoom(double edge)
+    {
+        if (edge > 20.0) return 0.09;   // past where the formula below changes sign, and plenty of room
+        return Math.Clamp((0.0241 * edge - 0.064) / (1.6 - 0.04 * edge), 0.0, 0.09);
+    }
+
     /// <summary>The same maps, with the stem's own map sheared. Rebuilt when the shear changes.</summary>
     private static readonly Affine[] FernSheared = [.. FernMaps];
 
@@ -465,109 +485,217 @@ internal static class DrawnFractals
     {
         // A slow sway either side of upright, so the shape is the thing that changes over time here
         // rather than the depth.
-        var maps = Maps(0.075 * Math.Sin(phase * 0.22));
+        var maps = Maps(LeanRoom(0.92 * frame.SpanX) * Math.Sin(phase * 0.22));
 
-        // How fine to go is chosen by trying, because it cannot be predicted: the fern nearly fills
-        // its own outline, so the number of boxes down to a given size goes as the *square* of the
-        // window in units of that size — a tenth of a pixel at the opening view is millions of them,
-        // half a second a frame. Starting coarse and refining while the points still fit the budget
-        // lands on the finest detail the frame can afford, which at a deep view, where all but a
-        // sliver is culled, is far finer than at the opening one.
-        // Plain doubles while the view is wide enough for them, which for this rule is most of the
-        // time and matters more than for any of the others — see FernBoxPlain.
-        bool plain = frame.Pixel > 1e-14;
+        // Thrown as points, which is the way a fern is normally drawn and much the cheapest: one
+        // multiply-add per point, no recursion, and the density comes out as the shading, thin at the
+        // frond tips and solid down the stem. Nothing else here looks as much like a fern.
+        //
+        // What it cannot do is zoom, and it fails in a way that measures itself: a random point lands
+        // in a window a billionth of the fern across about a billionth of the time, so it simply stops
+        // producing any. So it runs first and the count decides. Sizing the detail by hand instead —
+        // trying to have the box walk cover every view — cost fourteen million boxes a frame at the
+        // opening view and drew the fern as a solid silhouette.
+        int thrown = Scatter(frame, maps);
+        double width = 1.0;
 
-        double finest = 8.0;
-        for (int pass = 0; pass < 6; pass++)
+        if (thrown < ScatterFloor)
         {
-            _drawnPoints = 0;
-            _visits = 0;
+            // Too far in for that. Walked as boxes: an exact cover of whatever part of the fern is on
+            // screen, at a couple of pixels' detail, with each point drawn the size of the box it
+            // stands for so the cover reads evenly however the branches happened to divide.
+            // Two and a half pixels rather than one: the window is as full of fern at a deep view as at
+            // a shallow one — whatever part of it is on screen fills the screen the same way — so this
+            // is what the frame can afford, and each point being drawn the size of its own box means
+            // what is lost is sharpness rather than evenness.
+            const double finest = 2.5;
 
-            if (plain) FernBoxPlain(frame, maps, 0.2, 5.0, 3.2, 5.4, 0, finest * 0.5);
-            else FernBox(frame, maps, 0.2, 5.0, 3.2, 5.4, 0, finest * 0.5);
-
-            if (_drawnPoints > PointBudget / 2) break;
-            finest *= 0.5;
+            if (Sprinkle(frame, maps, finest) >= PointBudget) Sprinkle(frame, maps, finest * 2.0);
+            else width = finest;
         }
 
         paint.Style = SKPaintStyle.Fill;
-        paint.StrokeWidth = 1.0f;
-        paint.Color = Shade(palette, 3);
+        paint.StrokeWidth = (float)width;
+        paint.StrokeCap = SKStrokeCap.Square;
 
-        // Not antialiased, unlike everything else here. A hundred and sixty thousand smoothed points
-        // is most of a frame's time in Skia, and it buys nothing on a cloud this dense: the points sit
-        // about a pixel apart, so their edges are each other.
+        // Not antialiased, unlike everything else here. A few hundred thousand smoothed points is most
+        // of a frame's time in Skia — half a second, once — and it buys nothing on a cloud this dense:
+        // the points are each other's edges.
         paint.IsAntialias = false;
+
+        paint.Color = Frond;
         canvas.DrawPoints(SKPointMode.Points, _points.AsSpan(0, _drawnPoints).ToArray(), paint);
+
+        // Stems last, so a midrib reads through the leaves it carries rather than under them.
+        paint.Color = Stem;
+        canvas.DrawPoints(SKPointMode.Points, _stems.AsSpan(0, _stemPoints).ToArray(), paint);
+
         paint.IsAntialias = true;
+        paint.StrokeCap = SKStrokeCap.Round;
         paint.Style = SKPaintStyle.Stroke;
-        LastPieces = _drawnPoints;
-    }
-
-    /// <param name="hx">
-    /// Half-width of a box holding this piece of the fern. Each map's image of a box is bounded by
-    /// taking the absolute value of its matrix, which is conservative — the box stays a box instead of
-    /// turning with the map — and that is all the culling needs.
-    /// </param>
-    private static void FernBox(
-        Frame frame, Affine[] maps, Dd cx, Dd cy, double hx, double hy, int depth, double finest)
-    {
-        _visits++;
-        if (depth > LastDepth) LastDepth = depth;
-
-        double ox = frame.OffsetX(cx), oy = frame.OffsetY(cy);
-        if (!frame.VisibleBox(ox, oy, hx, hy)) return;
-
-        if (depth >= MaxDepth || frame.Pixels(Math.Max(hx, hy)) < finest)
-        {
-            if (_drawnPoints < PointBudget) _points[_drawnPoints++] = frame.At(ox, oy);
-            return;
-        }
-
-        foreach (var m in maps)
-        {
-            FernBox(frame, maps,
-                cx * m.M00 + cy * m.M01 + m.Tx,
-                cx * m.M10 + cy * m.M11 + m.Ty,
-                Math.Abs(m.M00) * hx + Math.Abs(m.M01) * hy,
-                Math.Abs(m.M10) * hx + Math.Abs(m.M11) * hy,
-                depth + 1, finest);
-        }
+        LastPieces = _drawnPoints + _stemPoints;
     }
 
     /// <summary>
-    /// The same walk in plain doubles, for a view wide enough not to need anything more.
+    /// The one fractal here that is a picture of something, so it is coloured like the thing rather
+    /// than from the shared gradient the rest share.
     ///
-    /// Worth writing twice here and nowhere else. This is the one rule whose tree is enormous at the
-    /// *opening* view rather than at a deep one: the fern nearly fills its own outline, so the number
-    /// of boxes down to a pixel goes as the square of the window measured in pixels — better than half
-    /// a million of them before any zooming at all. In wide arithmetic that is eighty milliseconds a
-    /// frame, spent entirely on digits that a view ten units across has no use for. The other rules
-    /// have small trees and pay for the wide arithmetic everywhere without it ever showing.
+    /// Which part is which comes straight out of the rule. One of the four maps flattens the whole fern
+    /// onto a vertical segment, and that segment is the stem — so a point is on a stem if its recent
+    /// history includes that map, and how recently says which one: applied last it gives the main stem,
+    /// one map ago the midribs of the three fronds, two ago their sub-fronds. A few generations of that
+    /// is brown and everything else is leaf, which is how a fern is actually built.
     /// </summary>
-    private static void FernBoxPlain(
-        Frame frame, Affine[] maps, double cx, double cy, double hx, double hy, int depth, double finest)
+    private static readonly SKColor Stem = new(0x8A, 0x5A, 0x2B);
+
+    private static readonly SKColor Frond = new(0x4F, 0xA8, 0x3D);
+
+    private const int StemGenerations = 3;
+
+    private static readonly SKPoint[] _stems = new SKPoint[PointBudget / 4];
+
+    private static int _stemPoints;
+
+    /// <summary>Files a plotted point as stem or leaf, by how long ago the flattening map ran.</summary>
+    private static void Plot(SKPoint at, int sinceStem)
+    {
+        if (sinceStem < StemGenerations)
+        {
+            if (_stemPoints < _stems.Length) _stems[_stemPoints++] = at;
+        }
+        else if (_drawnPoints < PointBudget)
+        {
+            _points[_drawnPoints++] = at;
+        }
+    }
+
+    /// <summary>How many points to throw, and how few landing on screen means the camera has gone in
+    /// too far for throwing them to work.</summary>
+    private const int ScatterPoints = 240_000;
+
+    private const int ScatterFloor = 30_000;
+
+    /// <summary>
+    /// The iterated function system played as a game of chance: pick a map by its weight, apply it,
+    /// plot where you land. The weights are what make the picture — most of them go to the map that
+    /// carries the stem, which is why the stem is solid and the tips are a scatter.
+    /// </summary>
+    private static int Scatter(Frame frame, Affine[] maps)
+    {
+        // Fixed seed every frame, so it is the same fern each time rather than a shimmering one.
+        var rng = new Random(12345);
+        double x = 0, y = 0;
+        int sinceStem = StemGenerations;
+        _drawnPoints = 0;
+        _stemPoints = 0;
+
+        for (int i = 0; i < ScatterPoints; i++)
+        {
+            double p = rng.NextDouble();
+            int pick = p < 0.01 ? 0 : p < 0.08 ? 1 : p < 0.15 ? 2 : 3;
+            ref readonly var m = ref maps[pick];
+
+            double nx = x * m.M00 + y * m.M01 + m.Tx;
+            y = x * m.M10 + y * m.M11 + m.Ty;
+            x = nx;
+            sinceStem = pick == 0 ? 0 : sinceStem + 1;
+
+            double ox = x - frame.CenterX.Hi, oy = y - frame.CenterY.Hi;
+            if (frame.VisibleBox(ox, oy, 0, 0)) Plot(frame.At(ox, oy), sinceStem);
+        }
+
+        _visits += ScatterPoints;
+        return _drawnPoints + _stemPoints;
+    }
+
+    /// <summary>
+    /// Runs one pass of the fern at the given detail, and returns how many points it drew. Visits
+    /// accumulate across the passes, since what the readout should say is the work the frame did.
+    /// </summary>
+    private static int Sprinkle(Frame frame, Affine[] maps, double finest)
+    {
+        _drawnPoints = 0;
+        _stemPoints = 0;
+
+        // The stopping size in plane units rather than pixels, so the walk compares two lengths
+        // instead of dividing by the pixel size a great many times.
+        FernPiece(frame, maps, Piece.Whole, 0, finest * 0.5 * frame.Pixel, false);
+
+        return _drawnPoints + _stemPoints;
+    }
+
+    /// <summary>
+    /// The transform from the whole fern to one piece of it: a two-by-two matrix and a translation, the
+    /// translation being a <see cref="Dd"/> because it is a position and a deep view needs more digits
+    /// of one than a double holds. The matrix is not — it is only ever a ratio of sizes.
+    /// </summary>
+    private readonly record struct Piece(double A, double B, double C, double D, Dd Tx, Dd Ty)
+    {
+        public static readonly Piece Whole = new(1.0, 0.0, 0.0, 1.0, Dd.Zero, Dd.Zero);
+
+        /// <summary>
+        /// This piece's own copy of the given map — the map applied *inside* this transform rather than
+        /// after it, which is what keeps the piece it describes inside this one.
+        /// </summary>
+        public Piece Then(in Affine m) => new(
+            A * m.M00 + B * m.M10,
+            A * m.M01 + B * m.M11,
+            C * m.M00 + D * m.M10,
+            C * m.M01 + D * m.M11,
+            Tx + (A * m.Tx + B * m.Ty),
+            Ty + (C * m.Tx + D * m.Ty));
+
+        public Dd CentreX => Tx + (A * BoxX + B * BoxY);
+
+        public Dd CentreY => Ty + (C * BoxX + D * BoxY);
+
+        /// <summary>
+        /// Half-extents of an upright box around this piece. The image of a box under a map that turns
+        /// it is not a box, so the bound takes the absolute value of the matrix, which is the smallest
+        /// upright box that certainly contains it.
+        /// </summary>
+        public double HalfW => Math.Abs(A) * BoxW + Math.Abs(B) * BoxH;
+
+        public double HalfH => Math.Abs(C) * BoxW + Math.Abs(D) * BoxH;
+    }
+
+    /// <summary>A box around the whole fern, which every map takes into itself.</summary>
+    private const double BoxX = 0.2, BoxY = 5.0, BoxW = 3.2, BoxH = 5.4;
+
+    /// <summary>
+    /// Walks the fern as nested boxes, for a view too far in for throwing points at it to land any.
+    ///
+    /// What descends is the composed transform from the whole fern down to this piece, each new map
+    /// applied on the *inside*. That is the only arrangement in which a child's box lies within its
+    /// parent's, and without that, culling is not sound. Applying the new map on the outside instead —
+    /// which is the order the iteration itself runs in — sends a child's box somewhere else entirely, so
+    /// a node does not stand for its descendants and rejecting one throws away pieces that were on
+    /// screen. The symptom was a deep view of the fern's own tip drawing a single point: the nested
+    /// pieces around the tip all lived in sibling subtrees, every one of which had been culled at the
+    /// first level for being nowhere near it.
+    /// </summary>
+    private static void FernPiece(
+        Frame frame, Affine[] maps, in Piece piece, int depth, double stop, bool stem)
     {
         _visits++;
         if (depth > LastDepth) LastDepth = depth;
 
-        double ox = cx - frame.CenterX.Hi, oy = cy - frame.CenterY.Hi;
+        double hx = piece.HalfW, hy = piece.HalfH;
+        double ox = frame.OffsetX(piece.CentreX), oy = frame.OffsetY(piece.CentreY);
         if (!frame.VisibleBox(ox, oy, hx, hy)) return;
 
-        if (depth >= MaxDepth || frame.Pixels(Math.Max(hx, hy)) < finest)
+        if (depth >= MaxDepth || Math.Max(hx, hy) < stop)
         {
-            if (_drawnPoints < PointBudget) _points[_drawnPoints++] = frame.At(ox, oy);
+            Plot(frame.At(ox, oy), stem ? 0 : StemGenerations);
             return;
         }
 
-        foreach (var m in maps)
+        for (int i = 0; i < maps.Length; i++)
         {
-            FernBoxPlain(frame, maps,
-                cx * m.M00 + cy * m.M01 + m.Tx,
-                cx * m.M10 + cy * m.M11 + m.Ty,
-                Math.Abs(m.M00) * hx + Math.Abs(m.M01) * hy,
-                Math.Abs(m.M10) * hx + Math.Abs(m.M11) * hy,
-                depth + 1, finest);
+            // The maps chosen nearest the root are the ones applied last, so they are the ones that
+            // decide whether this is stem or leaf — the same few generations the thrown points use.
+            FernPiece(frame, maps, piece.Then(maps[i]), depth + 1, stop,
+                stem || (i == 0 && depth < StemGenerations));
         }
     }
 
