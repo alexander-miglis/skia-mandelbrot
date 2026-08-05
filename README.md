@@ -4,7 +4,7 @@ A C# / SkiaSharp app that flies into the Mandelbrot set continuously and never s
 
 ### [⬇ Download the latest build](../../releases/latest)
 
-Windows, macOS (Apple Silicon and Intel) and Linux. Self-contained — no .NET install, one executable.
+Windows, macOS (Apple Silicon) and Linux. Self-contained — no .NET install, one executable.
 
 [![Fractal Zoom](docs/electric.jpg)](docs/electric.jpg)
 
@@ -12,17 +12,17 @@ Windows, macOS (Apple Silicon and Intel) and Linux. Self-contained — no .NET i
 
 ## Download
 
-[**The latest build**](../../releases/latest) — Windows, macOS (Apple Silicon and Intel) and Linux,
-all x64, **self-contained**: no .NET install, one executable, unzip and run.
+[**The latest build**](../../releases/latest) — Windows and Linux on x64, macOS on Apple Silicon,
+**self-contained**: no .NET install, one executable, unzip and run.
 
 There is one release and it is replaced whenever the program changes, rather than a list of them
-accumulating. [The workflow](.github/workflows/release.yml) rebuilds all four from `main` and swaps
+accumulating. [The workflow](.github/workflows/release.yml) rebuilds all three from `main` and swaps
 them in.
 
 | | |
 | --- | --- |
 | **Windows** | `fractal-zoom-windows-x64.zip` — unzip, run `FractalZoom.exe`. |
-| **macOS** | `fractal-zoom-macos-apple-silicon.tar.gz` or `-macos-intel.tar.gz`. Unsigned, so the first run needs `xattr -dr com.apple.quarantine FractalZoom`. |
+| **macOS** | `fractal-zoom-macos-apple-silicon.tar.gz`. Apple Silicon only. Unsigned, so the first run needs `xattr -dr com.apple.quarantine FractalZoom`. |
 | **Linux** | `fractal-zoom-linux-x64.tar.gz`. Needs `libfontconfig1` and a GL driver; on a bare container also `libgl1-mesa-dri`. |
 
 About 40 MB each, because the .NET runtime and Skia are in there. If you would rather build it

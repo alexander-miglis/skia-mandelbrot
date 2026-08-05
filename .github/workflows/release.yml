@@ -28,7 +28,6 @@ jobs:
         include:
           - { os: windows-latest, rid: win-x64,   name: windows-x64,         archive: zip }
           - { os: macos-latest,   rid: osx-arm64, name: macos-apple-silicon, archive: tar }
-          - { os: macos-latest,   rid: osx-x64,   name: macos-intel,         archive: tar }
           - { os: ubuntu-latest,  rid: linux-x64, name: linux-x64,           archive: tar }
     runs-on: ${{ matrix.os }}
     steps:
@@ -112,5 +111,5 @@ jobs:
           | | |
           | --- | --- |
           | **Windows** | \`fractal-zoom-windows-x64.zip\` — unzip, run \`FractalZoom.exe\`. |
-          | **macOS** | \`-macos-apple-silicon.tar.gz\` or \`-macos-intel.tar.gz\`. Unsigned, so the first run needs \`xattr -dr com.apple.quarantine FractalZoom\`. |
+          | **macOS** | \`-macos-apple-silicon.tar.gz\`. Apple Silicon only. Unsigned, so the first run needs \`xattr -dr com.apple.quarantine FractalZoom\`. |
           | **Linux** | \`-linux-x64.tar.gz\`. Needs \`libfontconfig1\`, the X11 client libraries and a GL driver. |"
