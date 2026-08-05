@@ -1,0 +1,100 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, rid: win-x64,   name: windows-x64,       archive: zip }
+          - { os: macos-latest,   rid: osx-arm64, name: macos-apple-silicon, archive: tar }
+          - { os: macos-latest,   rid: osx-x64,   name: macos-intel,       archive: tar }
+          - { os: ubuntu-latest,  rid: linux-x64, name: linux-x64,         archive: tar }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Self-contained, so there is no .NET to install first, and a single file, so the download is
+      # one thing rather than a folder of two hundred.
+      #
+      # IncludeAllContentForSelfExtract is the part that is easy to get wrong and impossible to catch
+      # without running the result. Silk.NET loads GLFW through its own native loader, which probes
+      # beside the executable; under the ordinary single-file layout the managed assemblies are
+      # bundled but glfw3.dll is not extracted where that loader looks, and the build fails at startup
+      # with "couldn't find a suitable window platform" while an identical directory build runs. This
+      # extracts everything on first launch instead, which costs a moment the first time and works.
+      - name: Publish
+        shell: bash
+        run: |
+          dotnet publish FractalZoom.csproj -c Release -r ${{ matrix.rid }} \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeAllContentForSelfExtract=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:DebugType=none \
+            -o publish
+          # SkiaSharp ships an 80 MB pdb of its own that the publish copies in regardless.
+          rm -f publish/*.pdb
+
+      - name: Add the readme and licence
+        shell: bash
+        run: |
+          cp README.md publish/ 2>/dev/null || true
+          cp LICENSE* publish/ 2>/dev/null || true
+
+      - name: Archive (zip)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: Compress-Archive -Path publish/* -DestinationPath fractal-zoom-${{ matrix.name }}.zip
+
+      # tar rather than zip for the Unix ones, because zip does not carry the executable bit and a
+      # download that has to be chmod'd before it will start is a download that gets reported as
+      # broken.
+      - name: Archive (tar.gz)
+        if: matrix.archive == 'tar'
+        shell: bash
+        run: |
+          chmod +x publish/FractalZoom
+          tar -czf fractal-zoom-${{ matrix.name }}.tar.gz -C publish .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fractal-zoom-${{ matrix.name }}
+          path: |
+            *.zip
+            *.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Attach the builds to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --notes "Self-contained builds — no .NET install needed. macOS is unsigned, so the first run needs \`xattr -dr com.apple.quarantine FractalZoom\`." \
+            dist/* || \
+          gh release upload "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber

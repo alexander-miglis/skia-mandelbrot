@@ -1,0 +1,98 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Does it build, and does the binary start, on all three platforms? The native assets are the
+  # thing worth checking here: SkiaSharp and GLFW are unmanaged libraries picked per platform, and
+  # a missing one builds perfectly and then fails at startup.
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - run: dotnet restore
+
+      - run: dotnet build -c Release --no-restore
+
+      # --help parses its arguments and returns before any window exists, so this runs anywhere,
+      # including on a runner with no display at all.
+      - name: Start the binary
+        run: dotnet run -c Release --no-build -- --help
+
+  # Actually render something. A build that compiles and a build that draws are different claims,
+  # and the second one is what this program is for.
+  #
+  # There is no GPU on a runner, so this is Mesa's software OpenGL under a virtual X server, which is
+  # slow but complete — llvmpipe implements far past the 3.3 this needs for the display surface. The
+  # kernel is pinned to the CPU because the GPU kernel wants a 4.0 context and fp64, which is asking a
+  # lot of a software rasteriser.
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install a software OpenGL stack
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libfontconfig1
+
+      - run: dotnet build -c Release
+
+      # One from each of the three renderers, since they share almost no code: a sampled field, a
+      # drawn construction, and the wide-arithmetic path that only exists below 1e-12.
+      - name: Render one of each kind
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          set -e
+          run() {
+            xvfb-run -a --server-args="-screen 0 640x480x24" \
+              dotnet run -c Release --no-build -- \
+                --explore --no-menu --no-hud --renderer cpu \
+                --duration 6 --size 320x240 "$@"
+          }
+          run --fractal mandelbrot --snapshot field.png
+          run --fractal koch       --snapshot drawn.png
+          # This centre is not a round number and cannot be: at 1e13 the window is 1.3e-13 across, so
+          # a view has to be aimed at somewhere the set actually has structure or the frame comes out
+          # a flat wash and fails the size check for reasons that have nothing to do with the code.
+          # It came from running the automatic descent to 1e13 and keeping where it stopped.
+          run --fractal burning \
+              --center -0.9109926047070786381001481,0.632270549363135982778393848 \
+              --zoom 1e13 --snapshot wide.png
+
+      # A window that never drew anything still writes a file, so check the size: an all-black 320x240
+      # PNG is under 2 kB and any of these should be several times that.
+      - name: Check the frames are not blank
+        run: |
+          set -e
+          for f in field.png drawn.png wide.png; do
+            size=$(stat -c%s "$f")
+            echo "$f: $size bytes"
+            [ "$size" -gt 4000 ] || { echo "::error::$f looks blank ($size bytes)"; exit 1; }
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-frames
+          path: '*.png'
+          if-no-files-found: warn

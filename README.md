@@ -6,6 +6,21 @@ A C# / SkiaSharp app that flies into the Mandelbrot set continuously and never s
 
 <sub>Super crisp mode, 2× supersampled, at 5.6e5× magnification. [More below.](#screenshots)</sub>
 
+## Download
+
+Ready-made builds are on the [releases page](../../releases) — Windows, macOS (Apple Silicon and
+Intel) and Linux, all x64. They are **self-contained**: no .NET install, one executable, unzip and
+run.
+
+| | |
+| --- | --- |
+| **Windows** | `fractal-zoom-windows-x64.zip` — unzip, run `FractalZoom.exe`. |
+| **macOS** | `fractal-zoom-macos-apple-silicon.tar.gz` or `-macos-intel.tar.gz`. Unsigned, so the first run needs `xattr -dr com.apple.quarantine FractalZoom`. |
+| **Linux** | `fractal-zoom-linux-x64.tar.gz`. Needs `libfontconfig1` and a GL driver; on a bare container also `libgl1-mesa-dri`. |
+
+About 40 MB each, because the .NET runtime and Skia are in there. If you would rather build it
+yourself, that is one command:
+
 ```bash
 dotnet run -c Release
 ```
@@ -461,6 +476,18 @@ dotnet publish -c Release -r linux-x64  --self-contained false
 dotnet publish -c Release -r win-x64    --self-contained false
 dotnet publish -c Release -r osx-arm64  --self-contained false
 ```
+
+[CI](.github/workflows/ci.yml) builds on all three every push, and then **renders on one of them**:
+Mesa's software OpenGL under a virtual X server, one frame from each of the three renderers, with the
+file size checked afterwards because a window that never drew anything still writes a PNG. A build
+that compiles and a build that draws are different claims.
+
+[The release workflow](.github/workflows/release.yml) publishes the downloads above from a tag. The
+part of it that cannot be got right by reading the documentation is `IncludeAllContentForSelfExtract`:
+Silk.NET loads GLFW through its own native loader, which probes beside the executable, and under the
+ordinary single-file layout `glfw3.dll` is not extracted where that loader looks — so the build fails
+at startup with *couldn't find a suitable window platform* while a directory build of the identical
+code runs. It has to be published once and *started* to find that out.
 
 Two portability details that are easy to get wrong: the base `SkiaSharp` package carries no native
 library at all, so `SkiaSharp.NativeAssets.Linux`, `.Win32` and `.macOS` are all referenced
