@@ -140,6 +140,26 @@ internal sealed class ZoomDirector
 
     public double OffsetY { get; private set; }
 
+    /// <summary>
+    /// High-precision part of the centre, for the formulas that have no perturbed form and for the
+    /// constructions that are drawn rather than sampled. Those have no reference orbit to hold the
+    /// camera's position, and a double cannot hold it either once the view is narrower than its last
+    /// bit — the centre and its neighbours become the same number and the picture stops changing as
+    /// you zoom. So the centre is split: this part carries where the camera is, and
+    /// <see cref="OffsetX"/> carries how far it has moved from there, which stays small and so stays
+    /// accurate as a double.
+    ///
+    /// Zero, and unused, while the view is wide enough for doubles alone.
+    /// </summary>
+    public Dd OriginX { get; private set; }
+
+    public Dd OriginY { get; private set; }
+
+    /// <summary>The centre in full, for the renderers that take it directly rather than as a delta.</summary>
+    public Dd CenterX => OriginX + OffsetX;
+
+    public Dd CenterY => OriginY + OffsetY;
+
     /// <summary>Half-height of the view in complex-plane units.</summary>
     public double Scale { get; private set; }
 
@@ -192,6 +212,8 @@ internal sealed class ZoomDirector
     public void Reset()
     {
         Reference = null;
+        OriginX = Dd.Zero;
+        OriginY = Dd.Zero;
         OffsetX = StartX;
         OffsetY = StartY;
         Scale = StartScale;
@@ -215,6 +237,8 @@ internal sealed class ZoomDirector
     public void ResetToOverview()
     {
         Reference = null;
+        OriginX = Dd.Zero;
+        OriginY = Dd.Zero;
         OffsetX = StartX;
         OffsetY = StartY;
         Scale = StartScale;
@@ -227,6 +251,36 @@ internal sealed class ZoomDirector
         _needsOpening = false;
         _exhausted = false;
         Generation++;
+    }
+
+    /// <summary>
+    /// Puts the camera on an absolute point at a given magnification, ready to draw. The reference
+    /// orbit and the high-precision anchor are both left for the next <see cref="Advance"/> to build,
+    /// which is the same path a view reached by scrolling takes.
+    /// </summary>
+    public void GoTo(Dd x, Dd y, double magnification)
+    {
+        ResetToOverview();
+        Scale = Math.Clamp(StartScale / Math.Max(1.0, magnification), ScaleFloor, MaxInteractiveScale);
+
+        if (FractalKind.Of(Kind).Perturbable)
+        {
+            // These hold the centre in the reference orbit, which is built from a double — so a view
+            // this way is only as precise as one. Not a limit on the zoom, which the orbit carries
+            // once it is anchored; a limit on naming the starting point from outside.
+            OffsetX = x.ToDouble();
+            OffsetY = y.ToDouble();
+        }
+        else
+        {
+            OriginX = x;
+            OriginY = y;
+            OffsetX = 0;
+            OffsetY = 0;
+        }
+
+        Fade = 1.0;
+        _phase = Phase.Zoom;
     }
 
     /// <summary>
@@ -260,6 +314,8 @@ internal sealed class ZoomDirector
 
     public void Advance(double dt, double aspect)
     {
+        MaintainAnchor();
+
         if (Interactive)
         {
             MaintainReference(aspect);
@@ -312,6 +368,39 @@ internal sealed class ZoomDirector
                 }
                 break;
         }
+    }
+
+    /// <summary>
+    /// Keeps <see cref="OriginX"/> carrying the camera's position and <see cref="OffsetX"/> carrying
+    /// only a small excursion from it.
+    ///
+    /// Re-anchored whenever the offset has grown past a few thousand views, which is what keeps its
+    /// rounding — a double's, so a ten-thousandth of a millionth of itself — well under a pixel.
+    /// Dropped again above the threshold, where a double holds the whole centre by itself and the
+    /// split would be pointless bookkeeping.
+    /// </summary>
+    private void MaintainAnchor()
+    {
+        if (FractalKind.Of(Kind).Perturbable) return;   // that path uses a reference orbit instead
+
+        if (Scale >= FractalKind.DoubleFloor)
+        {
+            if (OriginX.IsZero && OriginY.IsZero) return;
+
+            OffsetX = CenterX.ToDouble();
+            OffsetY = CenterY.ToDouble();
+            OriginX = Dd.Zero;
+            OriginY = Dd.Zero;
+            return;
+        }
+
+        double slack = Scale * 4096.0;
+        if (Math.Abs(OffsetX) <= slack && Math.Abs(OffsetY) <= slack) return;
+
+        OriginX += OffsetX;
+        OriginY += OffsetY;
+        OffsetX = 0;
+        OffsetY = 0;
     }
 
     /// <summary>
@@ -395,10 +484,20 @@ internal sealed class ZoomDirector
     }
 
     /// <summary>Escape time of a point given as a delta from the current view centre.</summary>
-    private bool SampleEscape(double dx, double dy, int maxIter, out double smooth) =>
-        Reference is not null
-            ? Reference.Escape(OffsetX + dx, OffsetY + dy, maxIter, out smooth)
-            : Mandelbrot.Escape(OffsetX + dx, OffsetY + dy, maxIter, Kind, out smooth);
+    private bool SampleEscape(double dx, double dy, int maxIter, out double smooth)
+    {
+        if (Reference is not null)
+            return Reference.Escape(OffsetX + dx, OffsetY + dy, maxIter, out smooth);
+
+        // Below the threshold the centre lives in the anchor, and sampling the offset alone would ask
+        // about a point near the origin of the plane instead of the one under the camera — so the
+        // director would steer by escape times belonging somewhere else entirely.
+        if (Scale < FractalKind.DoubleFloor)
+            return Mandelbrot.Escape(
+                OriginX + (OffsetX + dx), OriginY + (OffsetY + dy), maxIter, Kind, out smooth);
+
+        return Mandelbrot.Escape(OffsetX + dx, OffsetY + dy, maxIter, Kind, out smooth);
+    }
 
     /// <summary>
     /// Chooses the next point to fly toward, and notes an interior sample to anchor the next

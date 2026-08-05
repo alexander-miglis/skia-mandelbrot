@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Numerics;
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -97,6 +98,13 @@ internal static class Program
     private static Mandelbrot.Palette _palette = null!;
     private static double _paletteShift;
 
+    /// <summary>
+    /// Seconds of animation for the drawn fractals, which stops while paused. Only the fern uses it,
+    /// to lean: it is the one fractal here with nothing to find by going deeper, so what varies is its
+    /// shape rather than the magnification.
+    /// </summary>
+    private static double _drawnPhase;
+
     private static SKFont _font = null!;
     private static SKPaint _textPaint = null!;
     private static SKPaint _shadowPaint = null!;
@@ -151,6 +159,48 @@ internal static class Program
     private static bool _explore;
 
     private static Fractal _startFractal = Fractal.Mandelbrot;
+
+    private static (Dd X, Dd Y)? _startCenter;
+
+    /// <summary>
+    /// A written-out coordinate as a <see cref="Dd"/>, via a decimal: twenty-eight digits rather than
+    /// a double's seventeen, which is what a view past 1e17 needs to be named to.
+    /// </summary>
+    private static Dd? ParseWide(string text)
+    {
+        if (!decimal.TryParse(text, Invariant, Culture, out decimal value)) return null;
+
+        double hi = (double)value;
+        return new Dd(hi, (double)(value - Exact(hi)));
+    }
+
+    /// <summary>The inverse: a coordinate written out to more digits than a double would keep.</summary>
+    private static string Wide(Dd value)
+    {
+        // Outside a decimal's range there is nothing to print, so fall back to the double.
+        if (Math.Abs(value.Hi) > 1e10) return value.Hi.ToString("G17", Culture);
+        return (Exact(value.Hi) + Exact(value.Lo)).ToString("0.###########################", Culture);
+    }
+
+    /// <summary>
+    /// A double as a decimal, without the fifteen-digit rounding that casting to one performs.
+    ///
+    /// That cast is the documented behaviour of (decimal)double and it quietly wrecked both halves of
+    /// this: a <see cref="Dd"/>'s second component is itself about 1e-17 of its first, so rounding the
+    /// first to fifteen digits before subtracting leaves a remainder that is nearly all rounding
+    /// error. A view named that way lands about 1e-16 from where it was meant to, which past a
+    /// magnification of 1e16 is off the side of the screen. Formatting to a fixed number of decimals
+    /// and parsing that back is exact, because .NET formats the double's true binary value rather than
+    /// an approximation of it.
+    /// </summary>
+    private static decimal Exact(double value) =>
+        decimal.Parse(value.ToString("F27", Culture), Invariant, Culture);
+
+    private static double _startZoom;
+
+    private const NumberStyles Invariant = NumberStyles.Float | NumberStyles.AllowThousands;
+
+    private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
 
     /// <summary>Matches a name from the command line against the list, on any unique prefix.</summary>
     private static Fractal? FindFractal(string name)
@@ -330,6 +380,21 @@ internal static class Program
                     };
                     _useGpu = _backend != Backend.Cpu;
                     break;
+                // Parsed as the invariant culture, unlike the options above: these carry plane
+                // coordinates written down from one run to be typed into another, and a decimal point
+                // that means a thousands separator on some machines and a decimal point on others
+                // would make the same view two different places.
+                //
+                // And parsed as a decimal rather than a double, because a double holds seventeen
+                // digits and a deep view is not seventeen digits: at a magnification of 1e20 a centre
+                // rounded to a double is thousands of screens away from the point that was meant.
+                case "--center" when Next() is { } at && at.Split(',') is [var cxs, var cys]
+                                     && ParseWide(cxs) is { } cx && ParseWide(cys) is { } cy:
+                    _startCenter = (cx, cy);
+                    break;
+                case "--zoom" when double.TryParse(Next(), Invariant, Culture, out double mag):
+                    _startZoom = Math.Max(1.0, mag);
+                    break;
                 case "--snapshot" when Next() is { Length: > 0 } path:
                     _snapshotPath = path;
                     break;
@@ -351,10 +416,17 @@ internal static class Program
                                             Above 1 supersamples for extra crispness; below 1 is
                                             softer but each descent reaches far deeper.
                           --fractal NAME    mandelbrot (default), julia, burning, tricorn, multibrot
-                                            and twenty more. F opens the list. Only the Mandelbrot has a
-                                            perturbed form, so the others stop around 1e13x.
+                                            and twenty more. F opens the list. The Mandelbrot and its
+                                            Julia sets have a perturbed form and reach 1e290x; the rest
+                                            of the plane runs on 32-digit arithmetic below 1e12x and
+                                            reaches about 1e25x.
                           --explore         start on the whole set and steer by mouse: scroll to
                                             zoom at the pointer, drag to pan. E switches modes.
+                          --center X,Y      start at a point in the plane, written to as many digits
+                                            as you have — a deep view needs far more than a double
+                                            holds. Every run prints its own view in this form on exit,
+                                            so a place found by scrolling can be returned to.
+                          --zoom N          start at N times magnification
                           --still-size N    longest edge of a saved still, in pixels (default 3840,
                                             0 matches the window). The other edge follows the
                                             window's shape. P opens the dialog for it.
@@ -431,6 +503,15 @@ internal static class Program
         ChooseFractal(_startFractal);
         _director.Interactive = _explore;
         if (_explore) _director.ResetToOverview();
+
+        // A view given on the command line is a hand-steered one, so it comes with the camera.
+        if (_startCenter is { } start || _startZoom > 1.0)
+        {
+            SetExplore(true);
+            var kind = FractalKind.Of(_director.Kind);
+            var (atX, atY) = _startCenter ?? (new Dd(kind.CenterX), new Dd(kind.CenterY));
+            _director.GoTo(atX, atY, _startZoom > 1.0 ? _startZoom : 1.0);
+        }
 
         RecreateSurface();
         Clock.Restart();
@@ -920,7 +1001,11 @@ internal static class Program
             if (frozen) _director.Throttle = 0.0;
             if (_explore) EaseZoom(dt);
             _director.Advance(dt, aspect);
-            if (!frozen) _paletteShift += dt * 0.015; // slow shimmer through the gradient
+            if (!frozen)
+            {
+                _paletteShift += dt * 0.015; // slow shimmer through the gradient
+                _drawnPhase += dt;           // drives the fern's lean
+            }
         }
 
         var gradients = Mandelbrot.Gradient.All;
@@ -936,7 +1021,7 @@ internal static class Program
         var now = new FractalRenderer.View(
             _director.OffsetX, _director.OffsetY, _director.Scale,
             iterations, _paletteShift, _director.Generation, _director.Reference,
-            _director.Kind);
+            _director.Kind, _director.OriginX, _director.OriginY);
 
         // Ask the worker for the current view at the current quality, then draw whatever it
         // last finished. The two are deliberately out of step; the transform below hides it.
@@ -956,7 +1041,12 @@ internal static class Program
         // Ray marching exists only on the card, so those fractals override the backend choice
         // rather than quietly rendering something else on the processor.
         bool marched = style == RenderStyle.Raymarched;
-        bool onGpu = _gpu is not null && (_useGpu || marched) && style != RenderStyle.Drawn;
+
+        // The card's arithmetic is fp64 and gives out exactly where a double does, so a view past
+        // that on a formula with no perturbed form has to come back to the processor, which is where
+        // the wider arithmetic lives. Slower, and the only way these zoom any further.
+        bool onGpu = _gpu is not null && (_useGpu || marched) && style != RenderStyle.Drawn
+                     && !submit.Wide;
 
         // Ray marching has no CPU counterpart, so without the card these have nothing to draw. Left
         // blank with a word in the readout rather than handed to a kernel that would answer with the
@@ -966,9 +1056,10 @@ internal static class Program
 
         if (style == RenderStyle.Drawn || unavailable)
         {
-            // Nothing to compute: these are drawn from their own rule every frame, straight onto the
-            // canvas, and cost almost nothing because each rule stops subdividing at a pixel.
-            _computeMs += (1.0 - _computeMs) * 0.15;
+            // Nothing to submit: these are drawn from their own rule every frame, straight onto the
+            // canvas, further down. What that costs is measured there, and reported in place of the
+            // kernel time, since for these the rule is the kernel.
+            _computeMs += (DrawnFractals.LastMs - _computeMs) * 0.15;
         }
         else if (onGpu)
         {
@@ -987,7 +1078,7 @@ internal static class Program
         }
 
         if (_backend == Backend.Auto && _gpu is not null && !menuOpen
-            && style == RenderStyle.Field)
+            && style == RenderStyle.Field && !submit.Wide)
             Arbitrate(submit, kernelW, kernelH, budget);
 
         // The zoom controller has nothing to control while the camera is being steered by hand:
@@ -1017,7 +1108,8 @@ internal static class Program
         {
             have = false;
             DrawnFractals.Draw(canvas, _director.Kind,
-                _director.OffsetX, _director.OffsetY, _director.Scale, fb.X, fb.Y, _palette);
+                _director.CenterX, _director.CenterY, _director.Scale, fb.X, fb.Y, _palette,
+                _drawnPhase);
         }
         else if (onGpu)
         {
@@ -1091,6 +1183,13 @@ internal static class Program
                               $"reached {_director.Magnification:0.00e+00}x on cycle {_director.Cycle + 1} " +
                               $"({(onGpu ? "gpu" : "cpu")} kernel, {kw}x{kh}, {_computeMs:0.0} ms" +
                               $"{(onGpu ? $", {_gpu!.GpuMs:0.0} ms of card time" : "")}).");
+
+            // Where it ended up, in a form that can be handed straight back. A view found by
+            // scrolling around is otherwise unrecoverable — and it is what says whether a run went
+            // where it was told to.
+            Console.WriteLine($"View: --fractal \"{FractalKind.Of(_director.Kind).Name}\" " +
+                              $"--center {Wide(_director.CenterX)},{Wide(_director.CenterY)} " +
+                              $"--zoom {_director.Magnification.ToString("0.000e+00", Culture)}");
 
             if (_frozenGpuMs >= 0 && _gpu is not null)
             {
@@ -1255,14 +1354,20 @@ internal static class Program
         float size = (float)(13 * dpi);
         if (Math.Abs(_font.Size - size) > 0.5f) _font.Size = size;
 
-        bool onGpu = _gpu is not null && _useGpu;
+        // A view too narrow for fp64 with no perturbed form to fall back on runs the wider arithmetic,
+        // which only exists on the processor — so that decides both labels below, and the card's own
+        // frame size would be a stale number from before the switch.
+        bool wide = FractalKind.Of(_director.Kind).Style == RenderStyle.Field
+                    && _director.Reference is null && _director.Scale < FractalKind.DoubleFloor;
+        bool onGpu = _gpu is not null && _useGpu && !wide;
         var (kw, kh) = onGpu ? _gpu!.LastSize : _renderer.LastSize;
         int iterations = _director.MaxIterations;
         var style = FractalKind.Of(_director.Kind).Style;
         string mode = style == RenderStyle.Raymarched
             ? _gpu is null ? "needs an OpenGL 4.0 card — unavailable here" : "ray-marched"
             : style == RenderStyle.Drawn ? "drawn"
-            : _director.Reference is { } r ? $"perturbed, {r.FracBits}-bit anchor" : "fp64";
+            : _director.Reference is { } r ? $"perturbed, {r.FracBits}-bit anchor"
+            : wide ? "fp128" : "fp64";
         string where = (onGpu ? "gpu" : "cpu") + (_backend == Backend.Auto && _gpu is not null ? ", auto" : "");
         string still = Clock.Elapsed.TotalSeconds < _stillNoticeUntil && _stills.Status.Length > 0
             ? "   " + _stills.Status

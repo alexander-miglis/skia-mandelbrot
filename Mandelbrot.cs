@@ -57,6 +57,346 @@ internal static unsafe class Mandelbrot
         };
     }
 
+    /// <summary>
+    /// The same formulas, iterated in <see cref="Dd"/> instead of doubles.
+    ///
+    /// Only the arithmetic differs — every recurrence, every bailout and every colouring below is the
+    /// double version's, line for line — so this exists purely to carry the formulas without a
+    /// perturbed form deeper than a double reaches. Perturbation would be faster and go far deeper
+    /// still, but it has to be derived per formula, and for some of these (the logistic map's
+    /// Lyapunov exponent, say) there is nothing to derive: the iteration is not analytic in the
+    /// parameter. Wider arithmetic needs no derivation and works for all of them.
+    ///
+    /// It costs about fifteen times a double's iteration, which the host absorbs by rendering fewer
+    /// pixels: deep views on these formulas go soft rather than stopping.
+    /// </summary>
+    public static bool Escape(Dd cr, Dd ci, int maxIter, Fractal kind, out double smooth)
+    {
+        smooth = 0;
+        return kind switch
+        {
+            Fractal.Mandelbrot => QuadraticWide(Dd.Zero, Dd.Zero, cr, ci, maxIter, 1.0, out smooth),
+            Fractal.Julia => QuadraticWide(cr, ci, FractalKind.JuliaCr, FractalKind.JuliaCi, maxIter,
+                1.0, out smooth),
+            Fractal.BurningShip => BurningShipWide(cr, ci, maxIter, out smooth),
+            Fractal.Tricorn => QuadraticWide(Dd.Zero, Dd.Zero, cr, ci, maxIter, -1.0, out smooth),
+            Fractal.Multibrot => MultibrotWide(cr, ci, maxIter, out smooth),
+            Fractal.Phoenix => PhoenixWide(cr, ci, maxIter, out smooth),
+            Fractal.Newton => NewtonWide(cr, ci, maxIter, false, out smooth),
+            Fractal.Nova => NewtonWide(cr, ci, maxIter, true, out smooth),
+            Fractal.Magnet => MagnetWide(cr, ci, maxIter, out smooth),
+            Fractal.Lyapunov => LyapunovWide(cr, ci, maxIter, out smooth),
+            Fractal.PickoverStalks => TrapWide(cr, ci, maxIter, stalks: true, out smooth),
+            Fractal.OrbitTrap => TrapWide(cr, ci, maxIter, stalks: false, out smooth),
+            Fractal.SierpinskiTriangle => SierpinskiTriangleWide(cr, ci, maxIter, out smooth),
+            Fractal.SierpinskiCarpet => SierpinskiCarpetWide(cr, ci, maxIter, out smooth),
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// z -> z^2 + k, or with <paramref name="conjugate"/> negative the Tricorn's z -> conj(z)^2 + k.
+    /// Covers three of the entries: the Mandelbrot and Tricorn start at zero and take the pixel as k,
+    /// a Julia starts at the pixel and takes k fixed.
+    /// </summary>
+    private static bool QuadraticWide(
+        Dd zr, Dd zi, Dd kr, Dd ki, int maxIter, double conjugate, out double smooth)
+    {
+        smooth = 0;
+
+        for (int n = 0; n < maxIter; n++)
+        {
+            var next = zr * zr - zi * zi + kr;
+            zi = zr * zi * (2.0 * conjugate) + ki;
+            zr = next;
+
+            double mag2 = (zr * zr + zi * zi).ToDouble();
+            if (mag2 > Bailout2)
+            {
+                smooth = n + 1.0 - Math.Log2(0.5 * Math.Log(mag2));
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool BurningShipWide(Dd cr, Dd ci, int maxIter, out double smooth)
+    {
+        smooth = 0;
+        ci = -ci;
+        Dd zr = Dd.Zero, zi = Dd.Zero;
+
+        for (int n = 0; n < maxIter; n++)
+        {
+            var next = zr * zr - zi * zi + cr;
+            zi = Dd.Abs(zr * zi) * 2.0 + ci;
+            zr = next;
+
+            double mag2 = (zr * zr + zi * zi).ToDouble();
+            if (mag2 > Bailout2)
+            {
+                smooth = n + 1.0 - Math.Log2(0.5 * Math.Log(mag2));
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool MultibrotWide(Dd cr, Dd ci, int maxIter, out double smooth)
+    {
+        smooth = 0;
+        Dd zr = Dd.Zero, zi = Dd.Zero;
+        const double logDegree = 1.0986122886681098; // log 3
+
+        for (int n = 0; n < maxIter; n++)
+        {
+            var r2 = zr * zr;
+            var i2 = zi * zi;
+            var next = zr * (r2 - i2 * 3.0) + cr;
+            zi = zi * (r2 * 3.0 - i2) + ci;
+            zr = next;
+
+            double mag2 = (zr * zr + zi * zi).ToDouble();
+            if (mag2 > Bailout2)
+            {
+                smooth = n + 1.0 - Math.Log(0.5 * Math.Log(mag2)) / logDegree;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool PhoenixWide(Dd cr, Dd ci, int maxIter, out double smooth)
+    {
+        smooth = 0;
+        Dd zr = ci, zi = cr;
+        Dd prevR = Dd.Zero, prevI = Dd.Zero;
+
+        for (int n = 0; n < maxIter; n++)
+        {
+            var nextR = zr * zr - zi * zi + FractalKind.PhoenixP1 + prevR * FractalKind.PhoenixP2;
+            var nextI = zr * zi * 2.0 + prevI * FractalKind.PhoenixP2;
+            prevR = zr;
+            prevI = zi;
+            zr = nextR;
+            zi = nextI;
+
+            double mag2 = (zr * zr + zi * zi).ToDouble();
+            if (mag2 > Bailout2)
+            {
+                smooth = n + 1.0 - Math.Log2(0.5 * Math.Log(mag2));
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool NewtonWide(Dd zr, Dd zi, int maxIter, bool nova, out double smooth)
+    {
+        smooth = 0;
+        Dd addR = nova ? zr : Dd.Zero, addI = nova ? zi : Dd.Zero;
+        if (nova) { zr = 1.0; zi = Dd.Zero; }
+
+        for (int n = 0; n < maxIter; n++)
+        {
+            var r2 = zr * zr;
+            var i2 = zi * zi;
+            var sqR = r2 - i2;
+            var sqI = zr * zi * 2.0;
+            var cuR = zr * sqR - zi * sqI;
+            var cuI = zr * sqI + zi * sqR;
+            var numR = cuR - 1.0;
+            var numI = cuI;
+            var denR = sqR * 3.0;
+            var denI = sqI * 3.0;
+
+            var d = denR * denR + denI * denI;
+            if (d.Hi < 1e-300) return false;
+
+            var qR = (numR * denR + numI * denI) / d;
+            var qI = (numI * denR - numR * denI) / d;
+
+            var nextR = zr - qR + addR;
+            var nextI = zi - qI + addI;
+            double stepR = (nextR - zr).ToDouble(), stepI = (nextI - zi).ToDouble();
+            zr = nextR;
+            zi = nextI;
+
+            if (stepR * stepR + stepI * stepI < Settled)
+            {
+                double angle = Math.Atan2(zi.ToDouble(), zr.ToDouble());
+                int root = (int)Math.Round(angle / (2.0 * Math.PI / 3.0));
+                smooth = n + 0.34 * ((root + 3) % 3);
+                return true;
+            }
+
+            if ((zr * zr + zi * zi).ToDouble() > 1e12) return false;
+        }
+
+        return false;
+    }
+
+    private static bool MagnetWide(Dd cr, Dd ci, int maxIter, out double smooth)
+    {
+        smooth = 0;
+        Dd zr = Dd.Zero, zi = Dd.Zero;
+
+        for (int n = 0; n < maxIter; n++)
+        {
+            var numR = zr * zr - zi * zi + cr - 1.0;
+            var numI = zr * zi * 2.0 + ci;
+            var denR = zr * 2.0 + cr - 2.0;
+            var denI = zi * 2.0 + ci;
+
+            var d = denR * denR + denI * denI;
+            if (d.Hi < 1e-300) return false;
+
+            var qR = (numR * denR + numI * denI) / d;
+            var qI = (numI * denR - numR * denI) / d;
+
+            var nextR = qR * qR - qI * qI;
+            var nextI = qR * qI * 2.0;
+            double stepR = (nextR - zr).ToDouble(), stepI = (nextI - zi).ToDouble();
+            zr = nextR;
+            zi = nextI;
+
+            double mag2 = (zr * zr + zi * zi).ToDouble();
+            if (mag2 > Bailout2)
+            {
+                smooth = n + 1.0 - Math.Log2(0.5 * Math.Log(mag2));
+                return true;
+            }
+
+            if (stepR * stepR + stepI * stepI < Settled)
+            {
+                smooth = n;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The logistic map's Lyapunov exponent, iterated wide. The exponent itself is a sum of a few
+    /// thousand logarithms, each accurate to a double's sixteen digits and then divided by their
+    /// count, so it stays a double — what needs the width is the map, whose sensitivity to its growth
+    /// rate is the whole reason the picture has structure at every scale.
+    /// </summary>
+    private static bool LyapunovWide(Dd a, Dd b, int maxIter, out double smooth)
+    {
+        smooth = 0;
+
+        const string sequence = "AABAB";
+        int budget = Math.Clamp(maxIter, 80, 3000);
+
+        Dd x = 0.5;
+        for (int n = 0; n < 24; n++)
+        {
+            var r = sequence[n % sequence.Length] == 'A' ? a : b;
+            x = r * x * (1.0 - x);
+        }
+
+        double sum = 0;
+        for (int n = 0; n < budget; n++)
+        {
+            var r = sequence[n % sequence.Length] == 'A' ? a : b;
+            x = r * x * (1.0 - x);
+
+            double slope = Math.Abs((r * (1.0 - x * 2.0)).ToDouble());
+            if (slope < 1e-300) { sum -= 690.0; continue; }
+            sum += Math.Log(slope);
+        }
+
+        double exponent = sum / budget;
+        if (exponent >= 0) return false;
+
+        smooth = Math.Min(60.0, -exponent * 24.0);
+        return true;
+    }
+
+    private static bool TrapWide(Dd cr, Dd ci, int maxIter, bool stalks, out double smooth)
+    {
+        smooth = 0;
+
+        Dd zr = stalks ? cr : Dd.Zero;
+        Dd zi = stalks ? ci : Dd.Zero;
+        Dd kr = stalks ? -0.7269 : cr;
+        Dd ki = stalks ? 0.1889 : ci;
+
+        double nearest = double.MaxValue;
+        int budget = Math.Min(maxIter, 400);
+
+        for (int n = 0; n < budget; n++)
+        {
+            var next = zr * zr - zi * zi + kr;
+            zi = zr * zi * 2.0 + ki;
+            zr = next;
+
+            double r = zr.ToDouble(), i = zi.ToDouble();
+            double mag2 = r * r + i * i;
+            if (mag2 > 1e6) break;
+
+            double distance = stalks
+                ? Math.Min(Math.Abs(r), Math.Abs(i))
+                : Math.Abs(Math.Sqrt(mag2) - 0.5);
+            if (distance < nearest) nearest = distance;
+        }
+
+        if (nearest == double.MaxValue) return false;
+
+        smooth = Math.Min(40.0, -Math.Log(Math.Max(1e-12, nearest)) * 3.0);
+        return true;
+    }
+
+    /// <summary>
+    /// The Sierpinski tests are the two that gain most from the width, because what they consume is
+    /// the coordinate's bits themselves — one per doubling, or log2(3) per tripling. A double runs out
+    /// after forty-five levels; this holds twice as many, and the pictures are that much deeper.
+    /// </summary>
+    private static bool SierpinskiTriangleWide(Dd x, Dd y, int maxIter, out double smooth)
+    {
+        smooth = 0;
+        if (x.Hi < 0 || x.Hi > 1 || y.Hi < 0 || y.Hi > 1) return false;
+
+        int budget = Math.Min(maxIter, 100);
+        for (int n = 0; n < budget; n++)
+        {
+            bool right = x >= new Dd(0.5), top = y >= new Dd(0.5);
+            if (right && top) { smooth = n; return true; }
+
+            if (top) { y = y * 2.0 - 1.0; x *= 2.0; }
+            else if (right) { x = x * 2.0 - 1.0; y *= 2.0; }
+            else { x *= 2.0; y *= 2.0; }
+        }
+
+        return false;
+    }
+
+    private static bool SierpinskiCarpetWide(Dd x, Dd y, int maxIter, out double smooth)
+    {
+        smooth = 0;
+        if (x.Hi < 0 || x.Hi > 1 || y.Hi < 0 || y.Hi > 1) return false;
+
+        int budget = Math.Min(maxIter, 62);
+        for (int n = 0; n < budget; n++)
+        {
+            x *= 3.0;
+            y *= 3.0;
+            double dx = x.Floor(), dy = y.Floor();
+            if (dx == 1.0 && dy == 1.0) { smooth = n; return true; }
+
+            x -= dx;
+            y -= dy;
+        }
+
+        return false;
+    }
+
     /// <summary>Relative step below which a converging iteration is called settled.</summary>
     private const double Settled = 1e-12;
 
@@ -493,31 +833,51 @@ internal static unsafe class Mandelbrot
     /// orbit's centre rather than as absolute coordinates. This is what lets the zoom continue
     /// past the ~1e13 magnification where plain doubles stop resolving neighbouring pixels.
     /// </param>
+    /// <param name="originX">
+    /// High-precision part of the centre, for a view too narrow for a double to hold its position.
+    /// (<paramref name="centerX"/>, <paramref name="centerY"/>) are then read as an offset from it and
+    /// the formulas are iterated in <see cref="Dd"/>. Zero, and inert, for any view a double covers.
+    /// </param>
     public static void Render(
         IntPtr pixels, int stride, int width, int height, float[] field,
         double centerX, double centerY, double scale,
         int maxIter, Palette palette, double paletteShift, ReferenceOrbit? reference,
-        Fractal kind = Fractal.Mandelbrot)
+        Fractal kind = Fractal.Mandelbrot, Dd originX = default, Dd originY = default)
     {
-        EscapeField(field, width, height, centerX, centerY, scale, maxIter, reference, kind);
+        EscapeField(field, width, height, centerX, centerY, scale, maxIter, reference, kind,
+            originX, originY);
         Colourise((byte*)pixels, stride, width, height, field, palette, paletteShift);
     }
 
     private static void EscapeField(
         float[] field, int width, int height,
         double centerX, double centerY, double scale, int maxIter, ReferenceOrbit? reference,
-        Fractal kind)
+        Fractal kind, Dd originX, Dd originY)
     {
         double pixelSize = 2.0 * scale / height;
         double halfW = width * 0.5;
         double halfH = height * 0.5;
+
+        // Perturbation first where the formula has it, then the wider arithmetic, then plain doubles.
+        bool wide = reference is null && scale < FractalKind.DoubleFloor;
 
         Parallel.For(0, height, Options, y =>
         {
             int row = y * width;
             double ci = centerY - (y - halfH + 0.5) * pixelSize;
 
-            if (reference is null)
+            if (wide)
+            {
+                var ciWide = originY + ci;
+                for (int x = 0; x < width; x++)
+                {
+                    var crWide = originX + (centerX + (x - halfW + 0.5) * pixelSize);
+                    field[row + x] = Escape(crWide, ciWide, maxIter, kind, out double smooth)
+                        ? (float)Math.Max(0.0, smooth)
+                        : Interior;
+                }
+            }
+            else if (reference is null)
             {
                 for (int x = 0; x < width; x++)
                 {

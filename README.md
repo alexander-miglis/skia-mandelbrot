@@ -38,8 +38,21 @@ re-projection covers the gap between what you asked for and what the kernel has 
 
 Three things it does not do, because the automatic descent's machinery has nothing to say here: no
 rendering ahead of the camera (there is no future position to aim at), no zoom throttle (there is no
-rate to hold steady), and no giving up on a view. Zooming has a floor at the `1e-290` precision wall
-and a ceiling a little wider than the whole set.
+rate to hold steady), and no giving up on a view. Zooming stops where the fractal itself stops
+resolving — `1e-290` for the Mandelbrot and its Julia sets, about `1e-25` for everything else in the
+plane — and has a ceiling a little wider than the whole set.
+
+Every run prints where it ended up, in the form that takes it back there:
+
+```
+View: --fractal "Apollonian Gasket" --center -0.488635377933324982648723068,0.2360260227889846086797936 --zoom 1.000e+22
+```
+
+Those digits are the point. A view at 1e22× is narrower than the last bit of a double, so a centre
+rounded to one lands thousands of screens away from what was meant; `--center` is read to 28 digits for
+that reason. Which is also a trap: `(decimal)someDouble` in .NET rounds to *fifteen* significant
+digits, so the first version of this printed a number that looked precise, was not, and named nothing
+but blank screens.
 
 ```
 --size WxH        window size (default 1280x800)
@@ -47,7 +60,9 @@ and a ceiling a little wider than the whole set.
 --seed N          RNG seed, which decides the route it takes
 --quality N       kernel resolution vs the window, 0.2-2.0 (default 1); above 1 supersamples
 --explore         start on the whole set and steer with the mouse
---fractal NAME    mandelbrot (default), julia, burning, tricorn, multibrot or phoenix
+--center X,Y      start at a point in the plane, read to 28 digits
+--zoom N          start at N times magnification
+--fractal NAME    mandelbrot (default), julia, burning, tricorn, multibrot and twenty more
 --still-size N    longest edge of a saved still, in pixels (default 3840; 0 matches the window)
 --still-format F  png (default) or jpeg
 --renderer WHICH  where the kernel runs: auto (default), gpu or cpu
@@ -109,23 +124,42 @@ working as far down as the arithmetic does.
 
 **Drawn** — [DrawnFractals.cs](DrawnFractals.cs), geometry through Skia, no kernel at all: Koch
 Snowflake, Dragon Curve, Barnsley Fern, Apollonian Gasket, Fractal Tree, and an L-system (Hilbert).
-Two details make them zoom like the rest rather than to a fixed depth: every rule recurses until a
-piece is under a pixel and then stops, so detail appears as you go in and the work stays bounded; and
-points are transformed to screen coordinates in double precision here rather than by loading a scale
-into the canvas matrix, which is single precision and would break a few thousand times in. The
-Apollonian gasket generates each circle by the Descartes reflection `2(a+b+c) − d` on curvature and
-curvature×centre, which is exact — an earlier attempt solved the quadratic instead and picked the
-wrong root half the time.
+Three things make them zoom like the rest rather than to a fixed depth.
 
-Two measurements from that path worth recording. The tree ran at **11.3 fps at its opening view**,
+Every rule stops subdividing where a piece falls under a pixel, so detail appears as you go in and the
+work stays bounded. Coordinates are [Dd](Dd.cs) rather than doubles, which is what carries a
+construction past ~1e13×: a construction is built by adding a shrinking offset to a coordinate of order
+one, and once the offset falls below that coordinate's last bit a double simply loses it and every
+piece of the rule lands in the same place. Verified to **1e22×** on Koch, the dragon, the tree and the
+gasket. And the rules are walked a level at a time rather than depth first, which is what makes a frame
+that runs out of budget come out evenly detailed instead of lopsided — spending a shared budget depth
+first drew the tree's right-hand side in full and left the left-hand side empty.
+
+Four measurements from that path worth recording. The tree ran at **11.3 fps at its opening view**,
 before any zooming: not the recursion, but sixteen thousand individual `DrawLine` calls a frame, each
 preceded by a colour and width change so Skia could batch none of them. Collecting segments into one
 path per recursion depth — about twenty draw calls instead of sixteen thousand — took it to
-**99.6 fps**. And the depth cap, meant only as a safety valve at 42, was a zoom limit too: the tree
-shrinks by 0.72 a level and the dragon by 0.71, so 42 levels only reached about a millionth of the
-whole and there was nothing left to draw past that. It is now 140, with a per-frame piece budget doing
-the bounding instead — sized by what can be *drawn* in a frame rather than what looks complete, since
-at 120,000 the dragon spent the whole budget every frame and fell to twelve.
+**99.6 fps**. The depth cap, meant only as a safety valve at 42, was a zoom limit too: the tree shrinks
+by 0.72 a level and the dragon by 0.71, so 42 levels only reached about a millionth of the whole. The
+fern took **548 ms a frame** once it was walked as boxes rather than thrown as points — almost all of
+it Skia smoothing a hundred and sixty thousand individual points, which buys nothing on a cloud whose
+points sit a pixel apart; without it, **7 ms**. And the gasket's culling bounded each subtree by the
+circle *inscribed* in its gap, which is wrong in a way that only shows up deep: the circles that pile
+up towards a tangency point march away from the inscribed one, so past a few levels every subtree
+containing them was rejected as off screen and the gasket stopped drawing. It is now bounded by the gap
+itself — the box of its three tangency points, grown by each arc's sagitta.
+
+The Apollonian gasket generates each circle by the Descartes reflection `2(a+b+c) − d` on curvature and
+curvature×centre, which is exact — an earlier attempt solved the quadratic instead and picked the wrong
+root half the time. Checked against the definition rather than by eye: the packing stays mutually
+tangent to **2.3e-14** relative (a floor inherited from the starting quadruple, and scale-invariant, so
+invisible at any zoom) down to circles of radius 1e-23, degrading past that exactly as `Dd`'s 1e-32
+absolute precision predicts.
+
+The fern is the odd one out. It has nothing to find by going deeper — zoom into it and you find another
+fern, the same fern, forever — so what varies over time is its **shape**: a slow shear on the one map
+that carries the stem, which is applied over and over and so compounds all the way up, bending every
+frond a little more than the one below.
 
 **Ray-marched** — a distance estimator per fractal, marched on the card and lit by its own gradient:
 Mandelbulb, Mandelbox, Menger Sponge, Sierpiński Tetrahedron, Quaternion Julia, Kleinian. These need
@@ -135,8 +169,9 @@ and the zoom becomes camera distance, so dragging and scrolling move you around 
 distance stops at 0.0008, about 2000× in — the marcher works in fp32 and its hit tolerance scales
 with distance, so going deeper would need the marching in doubles or a re-centred camera.
 
-**Two of them go deep; the rest stop at ~1e13×.** Perturbation is not one technique that applies to
-everything — it is derived per formula, and [ReferenceOrbit.cs](ReferenceOrbit.cs) now carries two:
+**Two of them reach 1e290×; everything else in the plane reaches about 1e25×.** Perturbation is not
+one technique that applies to everything — it is derived per formula, and
+[ReferenceOrbit.cs](ReferenceOrbit.cs) carries two:
 
 - **Mandelbrot**, `dz' = 2·Z·dz + dz² + dc`. The reference is the orbit of *zero* under the anchor,
   and the per-pixel offset is a difference in the *parameter*, so it comes back every iteration.
@@ -147,13 +182,25 @@ everything — it is derived per formula, and [ReferenceOrbit.cs](ReferenceOrbit
   past 1e13×. It pays for the depth in speed: with no `dc` term there is nothing for BLA's `B`
   coefficient to multiply, so the table does not apply and every iteration is taken individually.
 
-Every other field formula iterates directly in fp64 and stops resolving at around **1e13×** instead
-of 1e290×; the zoom floor moves with the formula accordingly. Tricorn, Multibrot and Phoenix are
-mechanical from here — each is a variant of the same two code paths. Burning Ship has a known
-perturbed form but needs the sign taken from the reference, with a fallback where `Z` sits near an
-axis. Newton, Nova and Magnet are rational maps with no standard perturbation, Lyapunov is a
-parameter-space exponent that would need its own, and the two Sierpińskis are not perturbation at all
-— they would need a high-precision frame origin for the digit test.
+For everything else, the answer is not a cleverer algorithm but **more digits**, in [Dd.cs](Dd.cs):
+a number held as an unevaluated sum of two doubles, which carries about 32 significant digits instead
+of 16. Below 1e12× the twelve remaining field formulas switch to iterating in that, which moves them
+from ~1e13× to about **1e25×**. It needs no derivation and works for all of them — including the ones
+perturbation cannot touch, like the Lyapunov exponent, whose iteration is not analytic in the
+parameter at all. What it costs is the card: GPU arithmetic is fp64 and gives out exactly where a
+double does, so these views come back to the processor, where a frame takes tens of milliseconds
+rather than three. The readout says `fp128` when that has happened.
+
+Measured on 64 neighbouring pixels at a scale of 1e-20, at a slow-escaping point: the double kernel
+returns **one** distinct value across all of them, the wide kernel returns 42 for Burning Ship, 64 for
+Tricorn, 16 for Multibrot. The convergence-time formulas — Newton, Nova, Magnet — colour by whole
+iteration counts, so they have far less to resolve at any scale; the arithmetic no longer stops them,
+but a deep view of one is mostly flat unless it straddles a basin boundary.
+
+Perturbation would still be faster and deeper where it applies, and Tricorn, Multibrot and Phoenix are
+mechanical from the two forms above. Burning Ship has a known perturbed form that needs the sign taken
+from the reference. Those are worth doing; the wide arithmetic is what makes them optional rather than
+the only way to see past 1e13×.
 
 The automatic descent needs escape times to steer by, so the drawn and ray-marched ones hand the
 camera to you instead.

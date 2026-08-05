@@ -138,9 +138,22 @@ internal readonly record struct FractalKind(
     public const double PhoenixP2 = -0.5;
 
     /// <summary>
-    /// Scale at which a formula stops resolving neighbouring pixels. Perturbation carries the
-    /// Mandelbrot down to where the deltas themselves stop being representable; everything else is
-    /// held to what a double can separate directly.
+    /// Scale below which a plain double can no longer place a pixel: the coordinates of a view this
+    /// small differ in bits a double does not have. Above it everything runs in doubles, because they
+    /// are what the hardware and the card are fast at; below it the renderers switch to the wider
+    /// arithmetic in <see cref="Dd"/>.
     /// </summary>
-    public double Floor => Perturbable ? 1e-290 : 2e-13;
+    public const double DoubleFloor = 1e-12;
+
+    /// <summary>
+    /// Scale at which a formula stops resolving neighbouring pixels.
+    ///
+    /// Three different answers, because there are three different limits. Perturbation carries the
+    /// Mandelbrot and its Julia sets down to where the deltas themselves stop being representable.
+    /// Everything else in the plane — the other formulas, and the constructions that are drawn rather
+    /// than sampled — runs on <see cref="Dd"/> below <see cref="DoubleFloor"/>, which holds about
+    /// thirty-two digits and so places a pixel accurately to about here. The ray-marched ones read
+    /// this as a camera distance rather than a width and never approach it.
+    /// </summary>
+    public double Floor => Perturbable ? 1e-290 : Style == RenderStyle.Raymarched ? 2e-13 : 1e-25;
 }

@@ -169,7 +169,8 @@ internal sealed class StillRenderer
             Mandelbrot.Render(
                 band.GetPixels(), band.RowBytes, sourceW, renderRows, field,
                 view.CenterX, bandCenterY, bandScale,
-                maxIter, palette, view.PaletteShift, view.Reference, view.Kind);
+                maxIter, palette, view.PaletteShift, view.Reference, view.Kind,
+                view.OriginX, view.OriginY);
 
             Resolve(band, above, output, top / ss, rows / ss, ss);
 

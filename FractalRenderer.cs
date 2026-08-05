@@ -19,8 +19,16 @@ internal sealed class FractalRenderer : IDisposable
     internal readonly record struct View(
         double CenterX, double CenterY, double Scale,
         int MaxIterations, double PaletteShift, int Generation,
-        ReferenceOrbit? Reference, Fractal Kind = Fractal.Mandelbrot)
+        ReferenceOrbit? Reference, Fractal Kind = Fractal.Mandelbrot,
+        Dd OriginX = default, Dd OriginY = default)
     {
+        /// <summary>
+        /// Whether this view is too narrow for plain doubles and has no reference orbit to stand in
+        /// for them, which is what puts the kernel on <see cref="Dd"/> — and what keeps it off the
+        /// card, whose arithmetic is fp64 and stops exactly where a double does.
+        /// </summary>
+        public bool Wide => Reference is null && Scale < FractalKind.DoubleFloor;
+
         /// <summary>
         /// Where <paramref name="a"/>'s centre sits relative to <paramref name="b"/>'s, in
         /// complex-plane units. Cheap in the common case that both share a reference orbit; when
@@ -30,7 +38,15 @@ internal sealed class FractalRenderer : IDisposable
         public static (double X, double Y) CenterDelta(View a, View b)
         {
             if (ReferenceEquals(a.Reference, b.Reference))
+            {
+                // Same story one rung down: two frames straddling a re-anchor have centres measured
+                // from different origins, so those have to be brought together before subtracting.
+                if (a.OriginX != b.OriginX || a.OriginY != b.OriginY)
+                    return (((a.OriginX + a.CenterX) - (b.OriginX + b.CenterX)).ToDouble(),
+                            ((a.OriginY + a.CenterY) - (b.OriginY + b.CenterY)).ToDouble());
+
                 return (a.CenterX - b.CenterX, a.CenterY - b.CenterY);
+            }
 
             int bits = Math.Max(a.Reference?.FracBits ?? 128, b.Reference?.FracBits ?? 128);
             var ax = Anchor(a.Reference?.CenterX, a.CenterX, bits);
@@ -216,7 +232,8 @@ internal sealed class FractalRenderer : IDisposable
             Mandelbrot.Render(
                 target.GetPixels(), target.RowBytes, w, h, field,
                 job.CenterX, job.CenterY, job.Scale,
-                job.MaxIterations, palette, job.PaletteShift, job.Reference, job.Kind);
+                job.MaxIterations, palette, job.PaletteShift, job.Reference, job.Kind,
+                job.OriginX, job.OriginY);
             sw.Stop();
 
             lock (_gate)
