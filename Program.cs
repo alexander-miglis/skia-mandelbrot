@@ -157,7 +157,11 @@ internal static class Program
     private static long _frozenFrames;
 
     /// <summary>Camera is driven by the mouse instead of by the director.</summary>
-    private static bool _explore;
+    /// <summary>
+    /// Explore is the default: the app opens on the whole set with the camera in your hands. The
+    /// automatic descent is the thing you opt into, with --descend.
+    /// </summary>
+    private static bool _explore = true;
 
     private static Fractal _startFractal = Fractal.Mandelbrot;
 
@@ -258,6 +262,30 @@ internal static class Program
     private static Backend _backend = Backend.Auto;
     private static bool _useGpu = true;
     private static bool _loaded;
+
+    /// <summary>
+    /// How long a kernel frame may take, early on, before the card is judged not to be doing the work.
+    ///
+    /// Apple's OpenGL advertises GL_ARB_gpu_shader_fp64 and links a double-precision shader without
+    /// complaint, then fails to build a pipeline for it at draw time and silently falls back to a
+    /// software rasteriser — the hardware has no fp64 at all. Nothing reports an error: the version
+    /// check passes, the extension is listed, the program links. The only symptom is the frame taking
+    /// roughly a thousand times too long, so that is what gets measured.
+    ///
+    /// Deliberately far above any real card's frame and far below a software one's: measured here,
+    /// the same view is 12,000 ms emulated against about 30 ms on the processor.
+    /// </summary>
+    private const double GpuStartupDeadlineMs = 2500.0;
+
+    /// <summary>
+    /// Frames after which the card is taken at its word and the deadline stops applying. It is a
+    /// startup capability check, not a running speed limit — deep views legitimately take seconds,
+    /// and demoting there would throw away the card exactly where it is worth most.
+    /// </summary>
+    private const int GpuTrustAfterFrames = 3;
+
+    /// <summary>Set once the card has been given up on, so it is never probed or chosen again.</summary>
+    private static bool _gpuDemoted;
 
     private static double _nextProbe = ProbeSeconds;
     private static bool _probing;
@@ -386,6 +414,9 @@ internal static class Program
                 case "--explore":
                     _explore = true;
                     break;
+                case "--descend":
+                    _explore = false;
+                    break;
                 case "--fractal" when Next() is { } which && FindFractal(which) is { } chosen:
                     _startFractal = chosen;
                     break;
@@ -450,8 +481,11 @@ internal static class Program
                                             Julia sets have a perturbed form and reach 1e290x; the rest
                                             of the plane runs on 32-digit arithmetic below 1e12x and
                                             reaches about 1e25x.
-                          --explore         start on the whole set and steer by mouse: scroll to
-                                            zoom at the pointer, drag to pan. E switches modes.
+                          --descend         watch it descend by itself instead of steering. The
+                                            default is to explore: the whole set, with the camera
+                                            in your hands — scroll to zoom at the pointer, drag to
+                                            pan. E switches modes either way.
+                          --explore         the default; kept so scripts naming it still work
                           --center X,Y      start at a point in the plane, written to as many digits
                                             as you have — a deep view needs far more than a double
                                             holds. Every run prints its own view in this form on exit,
@@ -572,6 +606,16 @@ internal static class Program
         try
         {
             _gpu = new GpuKernel(_gl);
+
+            if (ProbeGpu() is { } tooSlow)
+            {
+                _gpu.Dispose();
+                _gpu = null;
+                _gpuUnavailable = tooSlow;
+                Report();
+                return;
+            }
+
             Console.WriteLine($"Graphics card kernel ready on {_gpu.Renderer}.");
         }
         catch (Exception ex)
@@ -1113,6 +1157,7 @@ internal static class Program
 
             _gpu.Step(budget);
             _computeMs += (_gpu.KernelMs - _computeMs) * 0.15;
+            WatchGpu();
         }
         else
         {
@@ -1319,8 +1364,101 @@ internal static class Program
     /// The probe costs one kernel frame every few seconds, and it leaves a fresh frame behind on
     /// the backend it timed, so a handover has something current to draw immediately.
     /// </summary>
+    /// <summary>
+    /// Renders one small frame and times it, before anything depends on the card.
+    ///
+    /// A driver can accept the kernel and then not run it on the card at all. Apple's OpenGL
+    /// advertises GL_ARB_gpu_shader_fp64, links the double-precision shader without complaint, and
+    /// then fails to build a pipeline for it at draw time and quietly falls back to a software
+    /// rasteriser — the hardware has no fp64 whatsoever. The version check passes, the extension is
+    /// listed, the program links: nothing reports an error anywhere. The only evidence is how long a
+    /// frame takes.
+    ///
+    /// It has to be measured on a deliberately small frame, because the failure cannot be caught on a
+    /// real one: a strip of a software-rasterised full frame does not yield until it is finished, so
+    /// by the time a watchdog on it can look, the window has already been frozen for over a minute.
+    /// This costs a bounded fraction of a second when it fails, and about a millisecond when it does
+    /// not.
+    ///
+    /// Returns null when the card is fit to use, otherwise why it is not.
+    /// </summary>
+    private static string? ProbeGpu()
+    {
+        const int side = 256;
+        const int iterations = 400;
+
+        // Measured here: the same work is ~2 ms on a working card and ~120 ms emulated, so anything
+        // near the threshold is already a card not worth having.
+        const double budgetMs = 40.0;
+
+        // The palette is not built until the first rendered frame, which is after this runs.
+        var palette = _palette ?? Mandelbrot.Build(Mandelbrot.Gradient.All[0]);
+
+        var probe = new FractalRenderer.View(
+            FractalKind.Of(Fractal.Mandelbrot).CenterX, FractalKind.Of(Fractal.Mandelbrot).CenterY,
+            FractalKind.Of(Fractal.Mandelbrot).Scale, iterations, 0.0, 0, null, Fractal.Mandelbrot);
+
+        // Step first and test Busy after: Submit only queues the frame, and the kernel does not
+        // become busy until a Step picks it up. Testing Busy first measures nothing and passes.
+        var clock = Stopwatch.StartNew();
+        _gpu!.Submit(probe, palette, side, side, side, side);
+        for (int guard = 0; guard < 4096; guard++)
+        {
+            _gpu.Step(1000.0);
+            if (!_gpu.Busy) break;
+        }
+        clock.Stop();
+
+        double took = clock.Elapsed.TotalMilliseconds;
+        return took <= budgetMs
+            ? null
+            : $"a {side}x{side} probe took {took:0} ms on {_gpu.Renderer}, against {budgetMs:0} ms "
+              + "allowed — the driver is running the double-precision kernel in software";
+    }
+
+    /// <summary>
+    /// Backstop for a card that passes the probe and degrades later.
+    ///
+    /// Gives up if its first few frames are wildly slow, which is what a driver-side fallback to
+    /// software looks like from here. Checked mid-frame as well as on completion, since
+    /// an emulated frame takes twelve seconds and waiting for it to finish is most of the problem.
+    /// </summary>
+    private static void WatchGpu()
+    {
+        if (_gpuDemoted || _gpu is null || _gpu.CompletedFrames >= GpuTrustAfterFrames) return;
+
+        double taken = Math.Max(_gpu.InFlightMs, _gpu.Busy ? 0.0 : _gpu.KernelMs);
+        if (taken <= GpuStartupDeadlineMs) return;
+
+        DemoteGpu($"its first frame was still going after {taken / 1000.0:0.0}s, so the driver is "
+                  + "almost certainly emulating the double-precision shader in software");
+    }
+
+    /// <summary>Moves to the CPU kernel for good, and stops the arbiter reaching for the card again.</summary>
+    private static void DemoteGpu(string why)
+    {
+        _gpuDemoted = true;
+        _gpuUnavailable = why;
+
+        if (_backend == Backend.Gpu)
+        {
+            // An explicit pin is an instruction, not a preference. Say what is happening and obey it.
+            Console.Error.WriteLine($"The graphics card kernel is not usable here: {why}. "
+                                    + "Staying on it because --renderer gpu asked for it; drop the "
+                                    + "flag, or pass --renderer cpu, for a usable frame rate.");
+            _gpuDemoted = false;
+            return;
+        }
+
+        _useGpu = false;
+        _probing = false;
+        Console.Error.WriteLine($"Falling back to the CPU kernel: {why}.");
+    }
+
     private static void Arbitrate(FractalRenderer.View submit, int kernelW, int kernelH, double budget)
     {
+        if (_gpuDemoted) return;
+
         double now = Clock.Elapsed.TotalSeconds;
 
         if (!_probing)

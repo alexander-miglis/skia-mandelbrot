@@ -81,6 +81,11 @@ internal sealed class SettingsScreen : IDisposable
         Label = "Camera",
         Choices = ["Descends by itself", "Explore with the mouse"],
         Values = [0, 1],
+
+        // Explore is the default. Set as an index rather than by reordering the choices, because
+        // Preselect and Show both assign this row as `explore ? 1 : 0` and a reorder silently
+        // inverts them.
+        Index = 1,
         Hint = "Exploring opens on the whole set and hands you the camera: scroll to zoom at the",
         Hint2 = "pointer, drag to pan. E switches at any time; either way the view starts over.",
     };

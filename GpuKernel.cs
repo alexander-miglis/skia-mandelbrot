@@ -211,6 +211,13 @@ internal sealed unsafe class GpuKernel : IDisposable
     public bool Busy => _busy;
 
     /// <summary>
+    /// Wall time the frame in flight has taken so far, in milliseconds, or zero when idle. Lets the
+    /// host give up on a frame that is going nowhere instead of waiting for it to finish, which
+    /// matters when a driver has quietly dropped the shader onto a software rasteriser.
+    /// </summary>
+    public double InFlightMs => _busy ? _clock.Elapsed.TotalMilliseconds : 0.0;
+
+    /// <summary>
     /// Dimensions the frame currently presentable was computed at, which is larger than the texture
     /// it ended up in whenever the detail setting is supersampling.
     /// </summary>
