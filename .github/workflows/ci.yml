@@ -63,10 +63,22 @@ jobs:
             xvfb \
             libgl1 libglx-mesa0 libgl1-mesa-dri \
             libx11-6 libxrandr2 libxinerama1 libxcursor1 libxi6 \
-            libxext6 libxfixes3 libxrender1 \
+            libxext6 libxfixes3 libxrender1 libxkbcommon0 \
+            libwayland-client0 libwayland-cursor0 libwayland-egl1 \
             libfontconfig1
 
       - run: dotnet build -c Release
+
+      # Silk.NET reports a native library that will not load as "not applicable" and throws away the
+      # loader's reason, so ask the loader directly. Nothing here fails the job — it is here to make
+      # the next failure diagnosable instead of guessable.
+      - name: What does GLFW need
+        run: |
+          so=$(find . -name 'libglfw*so*' | head -1)
+          echo "found: $so"
+          ldd "$so" || true
+          echo "--- missing ---"
+          ldd "$so" 2>/dev/null | grep -i "not found" || echo "(nothing missing)"
 
       # One from each of the three renderers, since they share almost no code: a sampled field, a
       # drawn construction, and the wide-arithmetic path that only exists below 1e-12.

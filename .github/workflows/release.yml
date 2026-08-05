@@ -1,12 +1,24 @@
-name: release
+name: latest build
 
+# One rolling release, replaced on every change to the program. There is no version history to keep
+# here — the useful artefact is "the build of what is on main right now", and old builds of a
+# personal renderer are of no use to anyone.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
+
+# A second push while this is running would race the first to replace the same release.
+concurrency:
+  group: latest-build
+  cancel-in-progress: true
 
 jobs:
   package:
@@ -14,10 +26,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, rid: win-x64,   name: windows-x64,       archive: zip }
+          - { os: windows-latest, rid: win-x64,   name: windows-x64,         archive: zip }
           - { os: macos-latest,   rid: osx-arm64, name: macos-apple-silicon, archive: tar }
-          - { os: macos-latest,   rid: osx-x64,   name: macos-intel,       archive: tar }
-          - { os: ubuntu-latest,  rid: linux-x64, name: linux-x64,         archive: tar }
+          - { os: macos-latest,   rid: osx-x64,   name: macos-intel,         archive: tar }
+          - { os: ubuntu-latest,  rid: linux-x64, name: linux-x64,           archive: tar }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -47,10 +59,6 @@ jobs:
             -o publish
           # SkiaSharp ships an 80 MB pdb of its own that the publish copies in regardless.
           rm -f publish/*.pdb
-
-      - name: Add the readme and licence
-        shell: bash
-        run: |
           cp README.md publish/ 2>/dev/null || true
           cp LICENSE* publish/ 2>/dev/null || true
 
@@ -60,8 +68,7 @@ jobs:
         run: Compress-Archive -Path publish/* -DestinationPath fractal-zoom-${{ matrix.name }}.zip
 
       # tar rather than zip for the Unix ones, because zip does not carry the executable bit and a
-      # download that has to be chmod'd before it will start is a download that gets reported as
-      # broken.
+      # download that has to be chmod'd before it will start is a download that gets reported broken.
       - name: Archive (tar.gz)
         if: matrix.archive == 'tar'
         shell: bash
@@ -79,22 +86,31 @@ jobs:
 
   publish:
     needs: package
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
-      - name: Attach the builds to the release
+      # Deleted and recreated rather than updated in place, so an asset that stops being built stops
+      # being offered instead of sitting there for ever as the newest copy of itself.
+      - name: Replace the latest build
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
+          set -e
+          gh release delete latest --repo "${GITHUB_REPOSITORY}" --yes --cleanup-tag || true
+          gh release create latest dist/* \
             --repo "${GITHUB_REPOSITORY}" \
-            --title "${GITHUB_REF_NAME}" \
-            --generate-notes \
-            --notes "Self-contained builds — no .NET install needed. macOS is unsigned, so the first run needs \`xattr -dr com.apple.quarantine FractalZoom\`." \
-            dist/* || \
-          gh release upload "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
+            --target "${GITHUB_SHA}" \
+            --title "Latest build" \
+            --notes "Built from \`${GITHUB_SHA}\` on $(date -u '+%Y-%m-%d'). Self-contained — no .NET install needed.
+
+          | | |
+          | --- | --- |
+          | **Windows** | \`fractal-zoom-windows-x64.zip\` — unzip, run \`FractalZoom.exe\`. |
+          | **macOS** | \`-macos-apple-silicon.tar.gz\` or \`-macos-intel.tar.gz\`. Unsigned, so the first run needs \`xattr -dr com.apple.quarantine FractalZoom\`. |
+          | **Linux** | \`-linux-x64.tar.gz\`. Needs \`libfontconfig1\`, the X11 client libraries and a GL driver. |"

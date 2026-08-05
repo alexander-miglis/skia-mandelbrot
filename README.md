@@ -2,15 +2,22 @@
 
 A C# / SkiaSharp app that flies into the Mandelbrot set continuously and never stops.
 
+### [⬇ Download the latest build](../../releases/latest)
+
+Windows, macOS (Apple Silicon and Intel) and Linux. Self-contained — no .NET install, one executable.
+
 [![Fractal Zoom](docs/electric.jpg)](docs/electric.jpg)
 
 <sub>Super crisp mode, 2× supersampled, at 5.6e5× magnification. [More below.](#screenshots)</sub>
 
 ## Download
 
-Ready-made builds are on the [releases page](../../releases) — Windows, macOS (Apple Silicon and
-Intel) and Linux, all x64. They are **self-contained**: no .NET install, one executable, unzip and
-run.
+[**The latest build**](../../releases/latest) — Windows, macOS (Apple Silicon and Intel) and Linux,
+all x64, **self-contained**: no .NET install, one executable, unzip and run.
+
+There is one release and it is replaced whenever the program changes, rather than a list of them
+accumulating. [The workflow](.github/workflows/release.yml) rebuilds all four from `main` and swaps
+them in.
 
 | | |
 | --- | --- |
