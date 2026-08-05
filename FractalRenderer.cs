@@ -19,7 +19,7 @@ internal sealed class FractalRenderer : IDisposable
     internal readonly record struct View(
         double CenterX, double CenterY, double Scale,
         int MaxIterations, double PaletteShift, int Generation,
-        ReferenceOrbit? Reference)
+        ReferenceOrbit? Reference, Fractal Kind = Fractal.Mandelbrot)
     {
         /// <summary>
         /// Where <paramref name="a"/>'s centre sits relative to <paramref name="b"/>'s, in
@@ -82,6 +82,7 @@ internal sealed class FractalRenderer : IDisposable
     private bool _jobDirty;
 
     private long _kernelUs;
+    private long _passes;
 
     public FractalRenderer()
     {
@@ -96,6 +97,12 @@ internal sealed class FractalRenderer : IDisposable
 
     /// <summary>Wall time of the most recent kernel pass, in milliseconds.</summary>
     public double KernelMs => Volatile.Read(ref _kernelUs) / 1000.0;
+
+    /// <summary>
+    /// Passes finished since startup. The host watches this to tell when a one-off submission has
+    /// been answered, which is how the two backends get timed against each other.
+    /// </summary>
+    public long Passes => Volatile.Read(ref _passes);
 
     /// <summary>Dimensions of the most recent kernel pass.</summary>
     public (int Width, int Height) LastSize
@@ -209,7 +216,7 @@ internal sealed class FractalRenderer : IDisposable
             Mandelbrot.Render(
                 target.GetPixels(), target.RowBytes, w, h, field,
                 job.CenterX, job.CenterY, job.Scale,
-                job.MaxIterations, palette, job.PaletteShift, job.Reference);
+                job.MaxIterations, palette, job.PaletteShift, job.Reference, job.Kind);
             sw.Stop();
 
             lock (_gate)
@@ -218,6 +225,7 @@ internal sealed class FractalRenderer : IDisposable
                 _working.HasContent = true;
                 (_ready, _working) = (_working, _ready);
                 Volatile.Write(ref _kernelUs, sw.ElapsedTicks * 1_000_000L / Stopwatch.Frequency);
+                Volatile.Write(ref _passes, _passes + 1);
             }
         }
     }

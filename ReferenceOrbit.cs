@@ -25,7 +25,10 @@ internal sealed class ReferenceOrbit
 
     private readonly BlaTable? _bla;
 
-    private ReferenceOrbit(BigFixed cx, BigFixed cy, double[] zr, double[] zi, int count, BlaTable? bla)
+    private readonly Fractal _kind;
+
+    private ReferenceOrbit(BigFixed cx, BigFixed cy, double[] zr, double[] zi, int count, BlaTable? bla,
+        Fractal kind)
     {
         CenterX = cx;
         CenterY = cy;
@@ -33,6 +36,7 @@ internal sealed class ReferenceOrbit
         _zi = zi;
         Count = count;
         _bla = bla;
+        _kind = kind;
     }
 
     public BigFixed CenterX { get; }
@@ -41,20 +45,39 @@ internal sealed class ReferenceOrbit
     /// <summary>Number of usable orbit entries. Z[0] is 0, so rebasing to index 0 is exact.</summary>
     public int Count { get; }
 
+    /// <summary>
+    /// The orbit itself, for the GPU backend, which has to hand the whole thing to the card rather
+    /// than call <see cref="Escape"/> a pixel at a time. Only the first <see cref="Count"/> entries
+    /// are meaningful.
+    /// </summary>
+    public double[] Zr => _zr;
+
+    /// <inheritdoc cref="Zr"/>
+    public double[] Zi => _zi;
+
     public int FracBits => CenterX.FracBits;
 
     /// <param name="dcMax">
     /// Largest offset from this orbit's centre that any pixel will be rendered at. Bounds the
     /// bilinear-approximation radii; pixels beyond it fall back to plain perturbation.
     /// </param>
-    public static ReferenceOrbit Compute(BigFixed cx, BigFixed cy, int length, double dcMax)
+    public static ReferenceOrbit Compute(BigFixed cx, BigFixed cy, int length, double dcMax,
+        Fractal kind = Fractal.Mandelbrot)
     {
         length = Math.Max(2, length);
         var zr = new double[length];
         var zi = new double[length];
 
-        var x = BigFixed.Zero(cx.FracBits);
-        var y = BigFixed.Zero(cx.FracBits);
+        // The two families differ only in where the orbit starts and what it adds. A Mandelbrot
+        // reference is the orbit of zero under the anchor; a Julia reference is the orbit of the
+        // anchor itself under the set's fixed constant — the anchor is a point in the picture rather
+        // than the parameter of it.
+        bool julia = kind == Fractal.Julia;
+        var addX = julia ? BigFixed.FromDouble(FractalKind.JuliaCr, cx.FracBits) : cx;
+        var addY = julia ? BigFixed.FromDouble(FractalKind.JuliaCi, cx.FracBits) : cy;
+
+        var x = julia ? cx : BigFixed.Zero(cx.FracBits);
+        var y = julia ? cy : BigFixed.Zero(cx.FracBits);
         int count = 0;
 
         for (int n = 0; n < length; n++)
@@ -70,11 +93,15 @@ internal sealed class ReferenceOrbit
             var x2 = x * x;
             var y2 = y * y;
             var xy = x * y;
-            x = x2 - y2 + cx;
-            y = xy + xy + cy;
+            x = x2 - y2 + addX;
+            y = xy + xy + addY;
         }
 
-        return new ReferenceOrbit(cx, cy, zr, zi, count, BlaTable.Build(zr, zi, count, dcMax));
+        // The approximation table's linear step, dz' = A*dz + B*dc, is derived for the Mandelbrot's
+        // recurrence. A Julia's has no dc term at all, so the table does not apply and those pixels
+        // take every iteration individually — correct, and slower.
+        var bla = julia ? null : BlaTable.Build(zr, zi, count, dcMax);
+        return new ReferenceOrbit(cx, cy, zr, zi, count, bla, kind);
     }
 
     /// <summary>
@@ -99,7 +126,12 @@ internal sealed class ReferenceOrbit
 
         double[] zr = _zr, zi = _zi;
         int count = Count;
-        double dzr = 0, dzi = 0;
+
+        // For a Julia the offset is where the pixel starts, not something added every step; for a
+        // Mandelbrot it is the difference in the parameter and so comes back each iteration.
+        bool julia = _kind == Fractal.Julia;
+        double dzr = julia ? dcr : 0, dzi = julia ? dci : 0;
+        if (julia) { dcr = 0; dci = 0; }
         int n = 0;  // reference index: the current z is Z[n] + dz
         int m = 0;  // iterations completed
 

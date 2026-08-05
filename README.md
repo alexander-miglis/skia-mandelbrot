@@ -13,20 +13,117 @@ dotnet run -c Release
 It opens on a settings screen over a live preview of the first view — pick how it renders, press
 enter to start. `esc` brings the menu back at any time, and it has an Exit row.
 
-Keys: `esc`/`tab` settings · `space` pause · `R` new descent · `↑`/`↓` zoom speed ·
-`H` toggle readout · `Q` quit outright
+Keys: `esc`/`tab` settings · `P` [save a still](#saving-a-still) · `E` [explore](#exploring-by-hand) ·
+`F` [next fractal](#the-other-fractals) · `space` pause · `R` new descent / reset view ·
+`↑`/`↓` zoom speed · `G` cycle where the kernel runs · `H` toggle readout · `Q` quit
+
+Both menus are also fully clickable — hover a row to focus it, click the `‹` `›` arrows or the row
+itself to change it, and the wheel steps whatever the pointer is over.
+
+## Exploring by hand
+
+`E`, or the Camera row in the menu, or `--explore` on the command line, takes the camera off the
+director and gives it to you — starting on the whole set, the view the automatic descent deliberately
+skips past:
+
+```bash
+dotnet run -c Release -- --explore
+```
+
+**Scroll to zoom at the pointer, drag to pan.** The point under the cursor stays under the cursor,
+which is what makes a wheel zoom feel like pulling yourself toward something rather than magnifying
+the middle of the window; `R` returns to the whole set. Everything underneath carries on unchanged —
+the perturbed kernel takes over below 1e-11 as usual, so you can steer past double precision, and the
+re-projection covers the gap between what you asked for and what the kernel has finished.
+
+Three things it does not do, because the automatic descent's machinery has nothing to say here: no
+rendering ahead of the camera (there is no future position to aim at), no zoom throttle (there is no
+rate to hold steady), and no giving up on a view. Zooming has a floor at the `1e-290` precision wall
+and a ceiling a little wider than the whole set.
 
 ```
 --size WxH        window size (default 1280x800)
 --speed N         zoom e-folds per second (default 0.25), held steady
 --seed N          RNG seed, which decides the route it takes
 --quality N       kernel resolution vs the window, 0.2-2.0 (default 1); above 1 supersamples
+--explore         start on the whole set and steer with the mouse
+--fractal NAME    mandelbrot (default), julia, burning, tricorn, multibrot or phoenix
+--still-size N    longest edge of a saved still, in pixels (default 3840; 0 matches the window)
+--still-format F  png (default) or jpeg
+--renderer WHICH  where the kernel runs: auto (default), gpu or cpu
+--freeze N        stop the camera at N magnification and keep re-rendering that one view,
+                  so two kernels can be timed on identical work
 --no-menu         skip the startup settings screen
 --duration N      exit after N seconds (default: run forever)
 --no-hud          hide the readout, for clean stills
 --palette N       fix the gradient: 0 Electric, 1 Ember, 2 Aurora, 3 Abyss, 4 Copper
 --snapshot FILE   write the last frame to FILE as a PNG on exit
 ```
+
+## Saving a still
+
+`P` opens a dialog: resolution from the window's own size up to **16K**, 4 / 9 / 16 samples per
+pixel, the iteration budget at 1× / 2× / 4× the live view's, and PNG or JPEG. It tells you the exact
+pixel dimensions, the sample count, and the folder it will write to before you commit, and once one
+still has been rendered it estimates how long the next will take from the throughput it measured.
+
+**It is not a screen capture.** The view is computed again from scratch at the chosen size, so a
+still is routinely several times sharper than anything that was ever on screen — a 4K still at 9
+samples from a 1000×700 window is nine times the pixels, 2¼ times the samples per pixel and twice the
+iterations of the best the live view can manage. Files land in your pictures folder as
+`fractal-zoom-<timestamp>-<magnification>.png`, and existing files are never overwritten.
+
+[StillRenderer.cs](StillRenderer.cs) runs it on the CPU kernel, on its own thread. The card is much
+faster but it is busy keeping the display at vsync, and a still is a one-off that nobody is timing —
+so this way the zoom never stalls, the camera stays yours while it works, and the picture comes out of
+the reference implementation of the two kernels, the one with the approximation table.
+
+It renders in horizontal bands, which is what makes progress reportable and keeps the supersampled
+scratch buffer at about 14 MB where a whole 4K frame at 2× would want 224 MB. Each band is computed
+with one extra row above and below that is then discarded, because the colouring reads its
+neighbours: without that overlap every band boundary would be coloured as though it were the edge of
+the image. Verified by measuring the row-to-row difference across the boundaries — at rows 128, 256
+and 384 of a banded still it came out at 39.1, 48.7 and 44.6, inside the 37–54 spread of their
+neighbours, so the seams are not there.
+
+## The other fractals
+
+`F`, or the Fractal row in the menu, switches formula — twenty-six of them, each with its own opening
+view. They are not one kind of thing, so there are three renderers, chosen per fractal by
+[Fractals.cs](Fractals.cs):
+
+**Fields** — a number per pixel, straight into the existing two-pass kernel and its band-limited
+colouring, on either backend. Mandelbrot (`z² + c`), Julia, Burning Ship (`(|Re z| + i|Im z|)² + c`),
+Tricorn/Mandelbar (`conj(z)² + c`), Multibrot (`z³ + c`), Phoenix (`z² + p₁ + p₂·z_prev`), Newton and
+Nova (which *converge*, so what is coloured is how long they took and which root they found),
+Magnet (`((z² + c − 1)/(2z + c − 2))²`, which both escapes and converges to one), Lyapunov (an
+exponent of the logistic map rather than an escape time at all), Pickover Stalks and Orbit Trap (the
+same dynamics, recording the orbit's closest approach to the axes or a circle instead of its escape),
+and the Sierpiński Triangle and Carpet as per-pixel digit tests — which, unlike drawing them, keeps
+working as far down as the arithmetic does.
+
+**Drawn** — [DrawnFractals.cs](DrawnFractals.cs), geometry through Skia, no kernel at all: Koch
+Snowflake, Dragon Curve, Barnsley Fern, Apollonian Gasket, Fractal Tree, and an L-system (Hilbert).
+Two details make them zoom like the rest rather than to a fixed depth: every rule recurses until a
+piece is under a pixel and then stops, so detail appears as you go in and the work stays bounded; and
+points are transformed to screen coordinates in double precision here rather than by loading a scale
+into the canvas matrix, which is single precision and would break a few thousand times in. The
+Apollonian gasket generates each circle by the Descartes reflection `2(a+b+c) − d` on curvature and
+curvature×centre, which is exact — an earlier attempt solved the quadratic instead and picked the
+wrong root half the time.
+
+**Ray-marched** — a distance estimator per fractal, marched on the card and lit by its own gradient:
+Mandelbulb, Mandelbox, Menger Sponge, Sierpiński Tetrahedron, Quaternion Julia, Kleinian. These need
+the card, so they override the backend choice rather than quietly rendering something else on the
+processor, and the flat view's controls are re-read as an orbit: the pan offsets become yaw and pitch,
+and the zoom becomes camera distance, so dragging and scrolling move you around the object.
+
+**Only the Mandelbrot goes deep.** Perturbation is not a general technique: the reference orbit in
+[ReferenceOrbit.cs](ReferenceOrbit.cs) implements `dz' = 2·Z·dz + dz² + dc`, which is the Mandelbrot
+recurrence and nothing else's. Every other field formula iterates directly in fp64 and stops
+resolving at around **1e13×** instead of 1e290×; the zoom floor moves with the formula accordingly.
+The automatic descent also needs escape times to steer by, so the drawn and ray-marched ones hand the
+camera to you instead.
 
 ## Screenshots
 
@@ -59,15 +156,19 @@ changes — so the choices can be seen rather than guessed at.
 
 | Setting | What it trades |
 | --- | --- |
+| Fractal | Which [formula](#the-other-fractals) the kernels iterate. |
+| Camera | Descends by itself, or [hands you the mouse](#exploring-by-hand) starting from the whole set. |
 | Detail | Kernel pixels against the window. *Super crisp* and *Sharper* supersample; lower settings are softer but each descent reaches much deeper. |
 | Zoom speed | Held constant while a descent lasts, so slower also means it gets further down. |
 | Motion sharpness | How much a frame may be stretched while the next computes. |
+| Kernel runs on | The graphics card, the processor, or whichever is measured faster at the current depth. |
 | Colours | A fixed gradient, or a new one per descent. |
 | Readout | The figures in the corner. |
 
-**Super crisp** renders above the window resolution (2× linear, so four samples per pixel) and lets
-Skia downsample with mipmaps — plain bilinear only reads a 2×2 neighbourhood and would alias most of
-the extra samples away. It resolves structure finer than a pixel instead of letting the band-limited
+**Super crisp** renders above the window resolution (2× linear, so four samples per pixel) and
+averages the extra samples back down — Skia with mipmaps on the CPU path, a
+[resolve pass](#the-gpu-kernel) on the card. Plain bilinear only reads a 2×2 neighbourhood and would
+alias most of the extra samples away. It resolves structure finer than a pixel instead of letting the band-limited
 colouring average it into a smooth wash. Measured on an identical frozen view, the Laplacian standard
 deviation of a detailed patch rises from 56.4 to 62.6, and filaments visibly hold their shape instead
 of breaking into speckle. Kernel buffers land in the 20-24M pixel range for a 1280×800 window on a retina
@@ -84,6 +185,12 @@ single descent to 1.3e7× over 100 s, where `--quality 2 --speed 0.25` burned th
 Below the settings are three action rows — *Start* / *Resume*, *Start a new descent* and *Exit* —
 so the menu is also the way out. `esc` toggles: into the menu from the zoom, and back out of it.
 
+The panel has a second page, for [stills](#saving-a-still), which `P` opens. Two pages rather than
+two panels: the navigation, the drawing and the look are identical, only the rows and the action at
+the bottom differ. Everything on both pages works by mouse as well as by key — the row rectangles are
+recorded on each draw and hit-tested against what is actually on screen, rather than against a second
+copy of the layout arithmetic that could drift out of step with it.
+
 Values passed on the command line preselect the matching entries, so the two cannot disagree, and
 reopening the menu syncs its Readout row to whatever `H` last left it at. `--no-menu` skips the screen
 entirely, which is what the timed and snapshot runs use.
@@ -94,13 +201,31 @@ through GLFW headlessly.
 
 ## Running from an IDE
 
-**Visual Studio** — open `FractalZoom.sln`. The Run dropdown is populated from
-`Properties/launchSettings.json` with the useful argument combinations already set up (*Deep dive*,
-*Max sharpness*, *Snapshot after 30s*, *Small window*). The same profiles work from the CLI:
+The same four argument combinations — *Deep dive*, *Max sharpness*, *Snapshot after 30s*,
+*Small window* — are set up for all three, so the useful runs are one click away wherever you open it.
+
+**Visual Studio** — open `FractalZoom.slnx`. The Run dropdown is populated from
+`Properties/launchSettings.json`. The same profiles work from the CLI:
 
 ```bash
 dotnet run -c Release --launch-profile "Deep dive"
 ```
+
+The solution is in the [XML `.slnx` format](https://devblogs.microsoft.com/visualstudio/new-simpler-solution-file-format/),
+which Visual Studio 2026, Visual Studio 2022 from 17.14, Rider from 2025.1 and the `dotnet` CLI from
+9.0.200 all open directly. It replaces the old `FractalZoom.sln` rather than sitting beside it,
+because with both present the SDK cannot tell which one a bare `dotnet build` means and stops with
+MSB1011. Anything older than that can regenerate a classic solution in one command:
+
+```bash
+dotnet new sln -n FractalZoom && dotnet sln FractalZoom.sln add FractalZoom.csproj
+```
+
+**JetBrains Rider** — open the same `FractalZoom.slnx`. The run configurations in
+[.run/](.run/) are checked in, so they appear in the dropdown on first open with no per-machine
+setup; each tracks the project's output path, so switching the solution configuration between Debug
+and Release switches which build it launches. Rider also lists the `launchSettings.json` profiles
+alongside them, which is the same set by another route.
 
 **VS Code** — F5. `.vscode/launch.json` has matching configurations and builds Release first, which
 matters: this is a compute-bound renderer, so the configuration you launch changes how deep it gets.
@@ -112,8 +237,11 @@ The trade is that stepping through the kernel sees some inlining.
 
 ## Platforms
 
-Runs on macOS, Windows and Linux — Silk.NET/GLFW for the window and OpenGL 3.3 for the surface, all
-of which are portable. Native assets for all three ship in the build, so `dotnet run` is enough:
+Runs on macOS, Windows and Linux — Silk.NET/GLFW for the window and OpenGL for the surface, all of
+which are portable. The window asks for a 4.0 context, which is what the
+[GPU kernel](#the-gpu-kernel) needs for double precision in shaders, and drops back to 3.3 with the
+CPU kernel if the driver will not give it one. Native assets for all three platforms ship in the
+build, so `dotnet run` is enough:
 
 ```bash
 dotnet publish -c Release -r linux-x64  --self-contained false
@@ -137,6 +265,11 @@ M4 Max (16 cores), 1280×800 window on a retina display:
 | --- | --- | --- |
 | defaults — native detail, steady speed | 144 s | 1.5e16× |
 | " (second descent, same run) | ~150 s | 1.9e19× |
+
+Those are CPU-kernel figures. With the [GPU kernel](#the-gpu-kernel) the same class of machine holds
+a 1e17× view at 69 ms a frame, which leaves the throttle pinned at its ceiling with roughly fourteen
+times the headroom before the give-up threshold — so what bounds a descent moves from the kernel back
+toward the iteration cap and the 1e290 precision floor. A 200 s run at `--speed 1.5` passed 3.16e26×.
 
 Lower the detail or the speed and descents go considerably further, because depth compounds: a
 cheaper kernel sustains the rate longer, and the deeper it gets the more iterations the bilinear
@@ -323,41 +456,132 @@ One subtlety worth recording: the give-up test only applies in the steady state.
 while the latency estimate still holds the previous one's deep, slow value, and counting that ended
 fresh descents 1.8 s after they began.
 
-### The GPU, and what it would take
+### The GPU kernel
 
-Skia's own work — the blit, the resampling, the fade, the HUD text — runs on the GPU through the
-OpenGL backend. The Mandelbrot kernel does not; it uses all CPU cores but one, deliberately, so the
-display thread keeps hitting vsync.
+Skia's own work — the blit, the resampling, the fade, the HUD text — has always run on the graphics
+card through the OpenGL backend. [GpuKernel.cs](GpuKernel.cs) puts the Mandelbrot kernel there too:
+GLSL 4.0 fragment shaders for the escape-time field and the colouring (and a third pass when
+supersampling, below), run over an FBO whose texture is handed straight to Skia with
+`SKImage.FromTexture`. Nothing is copied — the frame is drawn where it was computed — and it goes
+through the same re-projection as a CPU frame, so everything downstream is unchanged.
 
-The GPU would be dramatically faster. Measured with a fp32 escape-time kernel written as an
-`SKRuntimeEffect`, at 2560×1600 and 2000 iterations:
+The shaders are a transcription of [Mandelbrot.cs](Mandelbrot.cs) and
+[ReferenceOrbit.cs](ReferenceOrbit.cs) in the same order of operations, including rebasing, so the
+two backends agree about where the set's edge is. Three parts are not transcriptions:
 
-| | time |
-| --- | --- |
-| GPU, fp32 SkSL shader | **2.0 ms** |
-| CPU, fp64 kernel (15 cores) | 139.7 ms |
+- **The iteration is fp64, not fp32.** This is the constraint the earlier design notes ran into, and
+  it has not gone away: perturbation lowers the precision needed for the *centre*, not for the
+  per-pixel deltas, which sit around 1e-60 and are not representable in fp32 at all — its exponent
+  range gives out long before its mantissa does. It buys correctness at every depth the CPU path
+  reaches, and it is expensive: compiling the shallow kernel both ways and timing them on the same
+  frozen view, **fp32 ran 17.5× faster than fp64** (0.55 ms against 9.64 ms a frame). That number is
+  the size of the prize still on the table, and the way to collect it is *rescaled* perturbation,
+  carrying an explicit power-of-two scale factor per pixel so the deltas stay inside fp32's exponent
+  range. The bookkeeping — realigning three terms of wildly different magnitude every iteration, and
+  an orbit stored with its own exponents so a near-zero pass does not flush to nothing — would eat
+  much of the 17.5×, and getting it wrong shows up as the speckle this renderer exists to avoid. Not
+  implemented.
+- **The reference orbit is uploaded as raw doubles**, two 32-bit halves per component in an
+  `RGBA32UI` texture buffer, reassembled with `packDouble2x32`. Rounding it to fp32 would be far
+  cheaper and completely wrong: the orbit is the one thing every pixel shares, so an error in it is
+  an error in every pixel at once.
+- **No BLA.** The approximation table's variable-length skips are what the CPU has going for it at
+  depth; on a card, neighbouring pixels taking different-length jumps costs more divergence than the
+  skips save. This is why the margin below narrows as the view gets deeper.
 
-That is ~70×, and it is real rather than a missed synchronisation — the time scales linearly with the
-iteration budget (1.48 ms at 125 iterations, 14.95 ms at 2000, measured on an all-interior view where
-no pixel escapes early).
+**Frames are rendered in horizontal strips spread across display frames.** The whole design here
+rests on the display staying at vsync while the kernel runs behind it, and a single draw call that
+takes half a second would freeze the window for half a second — and, past a couple of seconds, be
+killed outright by the Windows display watchdog. Each strip is sized from a running measurement of
+cost per pixel-iteration (GL timer queries, polled, never waited on) to fill about 70% of a display
+frame. A fraction rather than a fixed number of milliseconds, because it has to hold at any refresh
+rate: 8 ms is two thirds of a 60 Hz frame and more than a whole 165 Hz one.
 
-What stops it being a drop-in replacement is precision, and the constraints are worth recording:
+**A strip has a floor on how small it may be, and that turned out to matter more than anything else
+in the kernel.** A strip is a rectangle of pixels, and the card wants thousands of threads in flight
+to hide the latency of a dependent fp64 chain; a thin one leaves most of it idle, so the work does
+not get cheaper anywhere near in proportion to its size. Timed on one frozen view at 1e17×, cost per
+whole frame against strip height:
 
-- **No fp64 in a shader.** SkSL is fp32 only. On Apple silicon there is no alternative — Metal
-  Shading Language has no `double` type either. (On Windows/Linux a native GLSL compute shader
-  *can* use fp64 via GL 4.0, though consumer NVIDIA runs it at a fraction of fp32 rate.) A plain
-  fp32 kernel runs out of precision around 1e5× magnification, 25 decades short of the interesting
-  part.
-- **SkSL has no `while` loops**, and `for` loops need a compile-time bound which it unrolls: 2048
-  iterations compile, 4096 fails with "program is too large". A deep view needs ~4600, so the kernel
-  would have to be split across passes with state carried in a float texture.
+| strip | 224 rows | 168 | 112 | 64 | 32 | 16 |
+| --- | --- | --- | --- | --- | --- | --- |
+| card time per frame | 65.4 ms | 66.0 ms | 78.1 ms | 149.0 ms | 224.2 ms | 321.6 ms |
 
-So the viable design is not "port the kernel" but *rescaled perturbation on the GPU*: keep computing
-the reference orbit on the CPU in high precision, upload it as a texture, and have the shader iterate
-only the deltas in fp32 — carrying an explicit power-of-two scale factor so they stay inside fp32's
-exponent range, which is the binding limit rather than its mantissa. Written in SkSL it would stay
-portable across all three platforms. It is a substantial piece of work and is not implemented here;
-what is implemented is the CPU path described above.
+Worse, it compounds. The cost model measures the collapse, concludes the strips must be smaller
+still to fit inside the budget, and drives itself into the corner — which is where it had settled.
+A floor of 128,000 pixels took that view from **296.9 ms to 69.2 ms of card time, a 4.3× speedup for
+three lines**. The floor sits at the low end of the flat part of that curve rather than the middle:
+192,000 measured the same to within a millisecond, and the smaller value leaves the pacing more room
+to hold the display at vsync when frames are expensive — measured at 59 fps at 1e17×, against 57 with
+the larger floor.
+
+A frame that only just overruns the budget is finished rather than split, for the same family of
+reason: a split costs a whole display frame of latency, and overshooting one vsync interval by a
+third beats handing the display a frame twice as stale. Without that, a cheap frame could take
+*longer* to arrive from the card than from the CPU — the CPU worker runs flat out on its own thread,
+where the card is deliberately paced.
+
+**The two magnitude tests in the inner loop do not square anything.** Escape and rebasing both ask
+about a magnitude, and taking the larger component instead of the true length removes four of the
+eleven fp64 multiplies in the loop — worth **1.13×** (77.5 ms against 68.7 ms on that same view).
+Neither test needs the precision: the escape threshold is arbitrary and the smooth count is computed
+from the real magnitude once, at escape, while rebasing is exact wherever it happens, so triggering
+it a fraction of an iteration early or late changes nothing. Checked rather than assumed — against
+the CPU kernel on an identical frozen view, the cheap tests disagree with it on 0.30% of pixels by
+more than 16/255, and the squared tests they replaced disagree on 0.31%. Equally close to the
+reference, one of them 13% faster.
+
+**Supersampled frames are resolved on the card**, by a third pass that box-filters the extra samples
+down to screen density before the frame is handed over. This is not an optimisation, it is a
+workaround that turned out to be the better design. Skia can minify while drawing, but only well
+with mipmaps, and its mipmapped sampling of a texture it does not own renders the frame as a flat
+wash of the image's mean colour — with the mip chain generated, complete, and verified level by
+level (`level 1` 1000px, `level 4` 125px, no GL error). Resolving first means Skia only ever draws a
+card frame at about 1:1, and a box over exactly the samples belonging to an output pixel is a better
+filter than a blend of the two power-of-two levels straddling it.
+
+Two traps worth recording, both of which produce a *plausible* wrong answer rather than an error:
+
+- Drawing commands return long before the card has run them, so when a whole frame is issued in one
+  strip the wall clock reads **zero**. Fed to the zoom controller that reads as a free kernel, and
+  the camera races ahead of frames that have not been drawn yet. The card's own timer queries are
+  the floor under that measurement.
+- Generating mip levels for a texture still attached to the bound framebuffer reads and writes the
+  same image. It is undefined, it raises no error, and it was not in fact the cause of the flat
+  frames above — but it was there, and it had to be ruled out before the real cause was visible.
+
+Measured on a Radeon RX 9070 XT against a Ryzen 9 5950X (16 cores), kernel buffer 1008×672, timing
+the full latency from submission to a usable frame. Depth alone does not pin a view down — the route
+is re-aimed against the clock, so two runs stopping at the same magnification stop in different
+places, and a frame costs far more or less depending on where it is than on how deep it is. The
+`--freeze` flag steps the descent at a fixed rate and then stops the camera, which makes the route a
+function of the seed and these a like-for-like comparison of one identical view:
+
+| view | GPU kernel | CPU kernel | |
+| --- | --- | --- | --- |
+| 1.01e9× | **17.1 ms** | 118.3 ms | 6.9× |
+| 1.02e13× | **59.2 ms** | 291.1 ms | 4.9× |
+| 1.01e17× | **69.2 ms** | 731.8 ms | 10.6× |
+
+The margin dips in the middle of that range because BLA is switching on for the CPU: a skip needs
+`|dc|` below `Epsilon·|Z|`, so the table is not built at all above about 4e16×, and below it the CPU
+starts taking whole runs of iterations at a time while the card is still taking them one by one.
+Deeper still, that stops keeping up with the sheer width of the card.
+
+Which one wins where is a property of the machine rather than of the program, though — a GeForce
+runs fp64 at 1/64 of its fp32 rate where this Radeon runs it at 1/32, and the CPU side varies by
+core count. That is not a safe thing to hardcode, which is why the default is `--renderer auto`: it
+**measures both and follows the faster one**, handing the idle backend one frame every three seconds
+and moving the kernel if the other is at least 20% faster. The margin is what stops it trading
+frames back and forth over noise when the two are close. The
+probe costs one kernel frame every few seconds (0.35 e-folds of the 49 in a 110 s run) and leaves a
+fresh frame behind on the backend it timed, so a handover has something current to draw immediately.
+`--renderer gpu` / `cpu` pin it, and `G` cycles the three at any time.
+
+A card that cannot run it is not an error: if the driver will not give a 4.0 context, or the shaders
+will not compile, the reason is printed and the run continues on the CPU kernel exactly as before.
+That is also the expected outcome on macOS, where the GL implementation is capped and there is no
+fp64 in Metal either — the fp32 rescaling work above is what would be needed there.
 
 ### The cross-fade
 

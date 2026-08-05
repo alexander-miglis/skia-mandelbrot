@@ -1,7 +1,25 @@
+# Build output
 bin/
 obj/
-.claude/
+
+# Visual Studio (2022 and 2026)
 .vs/
 *.user
+*.suo
+*.userosscache
+
+# JetBrains Rider and ReSharper. Not .run/ — that holds the shared run
+# configurations, which are meant to be committed.
+.idea/
+*.sln.iml
+*.DotSettings.user
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# Editors and OS
+.claude/
 .DS_Store
+Thumbs.db
+
+# Stills written by --snapshot
 fractal*.png
