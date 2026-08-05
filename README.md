@@ -14,7 +14,7 @@ It opens on a settings screen over a live preview of the first view — pick how
 enter to start. `esc` brings the menu back at any time, and it has an Exit row.
 
 Keys: `esc`/`tab` settings · `P` [save a still](#saving-a-still) · `E` [explore](#exploring-by-hand) ·
-`F` [next fractal](#the-other-fractals) · `space` pause · `R` new descent / reset view ·
+`F` [choose a fractal](#the-other-fractals) · `space` pause · `R` new descent / reset view ·
 `↑`/`↓` zoom speed · `G` cycle where the kernel runs · `H` toggle readout · `Q` quit
 
 Both menus are also fully clickable — hover a row to focus it, click the `‹` `›` arrows or the row
@@ -88,8 +88,13 @@ neighbours, so the seams are not there.
 
 ## The other fractals
 
-`F`, or the Fractal row in the menu, switches formula — twenty-six of them, each with its own opening
-view. They are not one kind of thing, so there are three renderers, chosen per fractal by
+`F`, or clicking the Fractal row in the menu, opens the list — all twenty-six at once in two columns,
+each tagged with the renderer it uses, and the current one marked. A row that cycles through
+twenty-six values one click at a time is no way to choose from twenty-six things: you cannot see
+what is on offer, and reaching the far end takes twenty-five clicks. The arrows on the row still step
+through them one at a time if that is what you want.
+
+They are not one kind of thing, so there are three renderers, chosen per fractal by
 [Fractals.cs](Fractals.cs):
 
 **Fields** — a number per pixel, straight into the existing two-pass kernel and its band-limited
@@ -112,17 +117,45 @@ Apollonian gasket generates each circle by the Descartes reflection `2(a+b+c) �
 curvature×centre, which is exact — an earlier attempt solved the quadratic instead and picked the
 wrong root half the time.
 
+Two measurements from that path worth recording. The tree ran at **11.3 fps at its opening view**,
+before any zooming: not the recursion, but sixteen thousand individual `DrawLine` calls a frame, each
+preceded by a colour and width change so Skia could batch none of them. Collecting segments into one
+path per recursion depth — about twenty draw calls instead of sixteen thousand — took it to
+**99.6 fps**. And the depth cap, meant only as a safety valve at 42, was a zoom limit too: the tree
+shrinks by 0.72 a level and the dragon by 0.71, so 42 levels only reached about a millionth of the
+whole and there was nothing left to draw past that. It is now 140, with a per-frame piece budget doing
+the bounding instead — sized by what can be *drawn* in a frame rather than what looks complete, since
+at 120,000 the dragon spent the whole budget every frame and fell to twelve.
+
 **Ray-marched** — a distance estimator per fractal, marched on the card and lit by its own gradient:
 Mandelbulb, Mandelbox, Menger Sponge, Sierpiński Tetrahedron, Quaternion Julia, Kleinian. These need
 the card, so they override the backend choice rather than quietly rendering something else on the
 processor, and the flat view's controls are re-read as an orbit: the pan offsets become yaw and pitch,
-and the zoom becomes camera distance, so dragging and scrolling move you around the object.
+and the zoom becomes camera distance, so dragging and scrolling move you around the object. That
+distance stops at 0.0008, about 2000× in — the marcher works in fp32 and its hit tolerance scales
+with distance, so going deeper would need the marching in doubles or a re-centred camera.
 
-**Only the Mandelbrot goes deep.** Perturbation is not a general technique: the reference orbit in
-[ReferenceOrbit.cs](ReferenceOrbit.cs) implements `dz' = 2·Z·dz + dz² + dc`, which is the Mandelbrot
-recurrence and nothing else's. Every other field formula iterates directly in fp64 and stops
-resolving at around **1e13×** instead of 1e290×; the zoom floor moves with the formula accordingly.
-The automatic descent also needs escape times to steer by, so the drawn and ray-marched ones hand the
+**Two of them go deep; the rest stop at ~1e13×.** Perturbation is not one technique that applies to
+everything — it is derived per formula, and [ReferenceOrbit.cs](ReferenceOrbit.cs) now carries two:
+
+- **Mandelbrot**, `dz' = 2·Z·dz + dz² + dc`. The reference is the orbit of *zero* under the anchor,
+  and the per-pixel offset is a difference in the *parameter*, so it comes back every iteration.
+- **Julia**, `dz' = 2·Z·dz + dz²`. Simpler, and different in a way that is easy to miss: the
+  reference is the orbit of *the anchor itself* under the set's fixed constant — the anchor is a point
+  in the picture rather than the parameter of it — and the per-pixel offset is just where that pixel
+  starts, added once and never again. Verified sharp at **1e20×**, where before it was a smooth blur
+  past 1e13×. It pays for the depth in speed: with no `dc` term there is nothing for BLA's `B`
+  coefficient to multiply, so the table does not apply and every iteration is taken individually.
+
+Every other field formula iterates directly in fp64 and stops resolving at around **1e13×** instead
+of 1e290×; the zoom floor moves with the formula accordingly. Tricorn, Multibrot and Phoenix are
+mechanical from here — each is a variant of the same two code paths. Burning Ship has a known
+perturbed form but needs the sign taken from the reference, with a fallback where `Z` sits near an
+axis. Newton, Nova and Magnet are rational maps with no standard perturbation, Lyapunov is a
+parameter-space exponent that would need its own, and the two Sierpińskis are not perturbation at all
+— they would need a high-precision frame origin for the digit test.
+
+The automatic descent needs escape times to steer by, so the drawn and ray-marched ones hand the
 camera to you instead.
 
 ## Screenshots
