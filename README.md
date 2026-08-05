@@ -72,7 +72,7 @@ but blank screens.
 --duration N      exit after N seconds (default: run forever)
 --no-hud          hide the readout, for clean stills
 --palette N       fix the gradient, 0 to 11 (see Colours below)
---snapshot FILE   write the last frame to FILE as a PNG on exit
+--snapshot FILE   write the last frame to FILE on exit; .jpg or .jpeg for a JPEG, else PNG
 ```
 
 ## Saving a still
@@ -252,24 +252,25 @@ camera to you instead.
 ## Every fractal
 
 All twenty-six, in the Electric gradient at 800×500, straight out of `--snapshot`. Most are the view
-each one opens on; the rest are noted below.
+each one opens on; the rest are noted below. **Every name links to a page on that fractal** — what the
+rule is, who worked it out, and what it took to draw it here.
 
 **Fields** — a number per pixel, through the two-pass kernel and its band-limited colouring.
 
 | | | |
 | --- | --- | --- |
-| [![Mandelbrot](docs/gallery/mandelbrot.jpg)](docs/gallery/mandelbrot.jpg)<br>**Mandelbrot** | [![Julia](docs/gallery/julia.jpg)](docs/gallery/julia.jpg)<br>**Julia** | [![Burning Ship](docs/gallery/burning-ship.jpg)](docs/gallery/burning-ship.jpg)<br>**Burning Ship** |
-| [![Tricorn](docs/gallery/tricorn.jpg)](docs/gallery/tricorn.jpg)<br>**Tricorn** | [![Multibrot](docs/gallery/multibrot.jpg)](docs/gallery/multibrot.jpg)<br>**Multibrot** | [![Phoenix](docs/gallery/phoenix.jpg)](docs/gallery/phoenix.jpg)<br>**Phoenix** |
-| [![Newton](docs/gallery/newton.jpg)](docs/gallery/newton.jpg)<br>**Newton** | [![Nova](docs/gallery/nova.jpg)](docs/gallery/nova.jpg)<br>**Nova** | [![Magnet](docs/gallery/magnet.jpg)](docs/gallery/magnet.jpg)<br>**Magnet** |
-| [![Lyapunov](docs/gallery/lyapunov.jpg)](docs/gallery/lyapunov.jpg)<br>**Lyapunov** | [![Pickover Stalks](docs/gallery/pickover-stalks.jpg)](docs/gallery/pickover-stalks.jpg)<br>**Pickover Stalks** | [![Orbit Trap](docs/gallery/orbit-trap.jpg)](docs/gallery/orbit-trap.jpg)<br>**Orbit Trap** |
-| [![Sierpiński Triangle](docs/gallery/sierpinski-triangle.jpg)](docs/gallery/sierpinski-triangle.jpg)<br>**Sierpiński Triangle** | [![Sierpiński Carpet](docs/gallery/sierpinski-carpet.jpg)](docs/gallery/sierpinski-carpet.jpg)<br>**Sierpiński Carpet** |  |
+| [![Mandelbrot](docs/gallery/mandelbrot.jpg)](docs/fractals/mandelbrot.md)<br>**[Mandelbrot](docs/fractals/mandelbrot.md)** | [![Julia](docs/gallery/julia.jpg)](docs/fractals/julia.md)<br>**[Julia](docs/fractals/julia.md)** | [![Burning Ship](docs/gallery/burning-ship.jpg)](docs/fractals/burning-ship.md)<br>**[Burning Ship](docs/fractals/burning-ship.md)** |
+| [![Tricorn](docs/gallery/tricorn.jpg)](docs/fractals/tricorn.md)<br>**[Tricorn](docs/fractals/tricorn.md)** | [![Multibrot](docs/gallery/multibrot.jpg)](docs/fractals/multibrot.md)<br>**[Multibrot](docs/fractals/multibrot.md)** | [![Phoenix](docs/gallery/phoenix.jpg)](docs/fractals/phoenix.md)<br>**[Phoenix](docs/fractals/phoenix.md)** |
+| [![Newton](docs/gallery/newton.jpg)](docs/fractals/newton.md)<br>**[Newton](docs/fractals/newton.md)** | [![Nova](docs/gallery/nova.jpg)](docs/fractals/nova.md)<br>**[Nova](docs/fractals/nova.md)** | [![Magnet](docs/gallery/magnet.jpg)](docs/fractals/magnet.md)<br>**[Magnet](docs/fractals/magnet.md)** |
+| [![Lyapunov](docs/gallery/lyapunov.jpg)](docs/fractals/lyapunov.md)<br>**[Lyapunov](docs/fractals/lyapunov.md)** | [![Pickover Stalks](docs/gallery/pickover-stalks.jpg)](docs/fractals/pickover-stalks.md)<br>**[Pickover Stalks](docs/fractals/pickover-stalks.md)** | [![Orbit Trap](docs/gallery/orbit-trap.jpg)](docs/fractals/orbit-trap.md)<br>**[Orbit Trap](docs/fractals/orbit-trap.md)** |
+| [![Sierpiński Triangle](docs/gallery/sierpinski-triangle.jpg)](docs/fractals/sierpinski-triangle.md)<br>**[Sierpiński Triangle](docs/fractals/sierpinski-triangle.md)** | [![Sierpiński Carpet](docs/gallery/sierpinski-carpet.jpg)](docs/fractals/sierpinski-carpet.md)<br>**[Sierpiński Carpet](docs/fractals/sierpinski-carpet.md)** |  |
 
 **Drawn** — geometry through Skia, no kernel at all.
 
 | | | |
 | --- | --- | --- |
-| [![Koch Snowflake](docs/gallery/koch-snowflake.jpg)](docs/gallery/koch-snowflake.jpg)<br>**Koch Snowflake** | [![Dragon Curve](docs/gallery/dragon-curve.jpg)](docs/gallery/dragon-curve.jpg)<br>**Dragon Curve** | [![Barnsley Fern](docs/gallery/barnsley-fern.jpg)](docs/gallery/barnsley-fern.jpg)<br>**Barnsley Fern** |
-| [![Apollonian Gasket](docs/gallery/apollonian-gasket.jpg)](docs/gallery/apollonian-gasket.jpg)<br>**Apollonian Gasket** | [![Fractal Tree](docs/gallery/fractal-tree.jpg)](docs/gallery/fractal-tree.jpg)<br>**Fractal Tree** | [![L-System (Hilbert)](docs/gallery/l-system-hilbert.jpg)](docs/gallery/l-system-hilbert.jpg)<br>**L-System (Hilbert)** |
+| [![Koch Snowflake](docs/gallery/koch-snowflake.jpg)](docs/fractals/koch-snowflake.md)<br>**[Koch Snowflake](docs/fractals/koch-snowflake.md)** | [![Dragon Curve](docs/gallery/dragon-curve.jpg)](docs/fractals/dragon-curve.md)<br>**[Dragon Curve](docs/fractals/dragon-curve.md)** | [![Barnsley Fern](docs/gallery/barnsley-fern.jpg)](docs/fractals/barnsley-fern.md)<br>**[Barnsley Fern](docs/fractals/barnsley-fern.md)** |
+| [![Apollonian Gasket](docs/gallery/apollonian-gasket.jpg)](docs/fractals/apollonian-gasket.md)<br>**[Apollonian Gasket](docs/fractals/apollonian-gasket.md)** | [![Fractal Tree](docs/gallery/fractal-tree.jpg)](docs/fractals/fractal-tree.md)<br>**[Fractal Tree](docs/fractals/fractal-tree.md)** | [![L-System (Hilbert)](docs/gallery/l-system-hilbert.jpg)](docs/fractals/l-system-hilbert.md)<br>**[L-System (Hilbert)](docs/fractals/l-system-hilbert.md)** |
 
 **Ray-marched** — a distance estimator on the card, lit by its own gradient. Here the pan is an orbit
 and the zoom is a camera distance, so all six need a camera before they show anything: at the default
@@ -278,8 +279,8 @@ pass of this gallery looked like.
 
 | | | |
 | --- | --- | --- |
-| [![Mandelbulb](docs/gallery/mandelbulb.jpg)](docs/gallery/mandelbulb.jpg)<br>**Mandelbulb** | [![Mandelbox](docs/gallery/mandelbox.jpg)](docs/gallery/mandelbox.jpg)<br>**Mandelbox** | [![Menger Sponge](docs/gallery/menger-sponge.jpg)](docs/gallery/menger-sponge.jpg)<br>**Menger Sponge** |
-| [![Sierpiński Tetrahedron](docs/gallery/sierpinski-tetrahedron.jpg)](docs/gallery/sierpinski-tetrahedron.jpg)<br>**Sierpiński Tetrahedron** | [![Quaternion Julia](docs/gallery/quaternion-julia.jpg)](docs/gallery/quaternion-julia.jpg)<br>**Quaternion Julia** | [![Kleinian](docs/gallery/kleinian.jpg)](docs/gallery/kleinian.jpg)<br>**Kleinian** |
+| [![Mandelbulb](docs/gallery/mandelbulb.jpg)](docs/fractals/mandelbulb.md)<br>**[Mandelbulb](docs/fractals/mandelbulb.md)** | [![Mandelbox](docs/gallery/mandelbox.jpg)](docs/fractals/mandelbox.md)<br>**[Mandelbox](docs/fractals/mandelbox.md)** | [![Menger Sponge](docs/gallery/menger-sponge.jpg)](docs/fractals/menger-sponge.md)<br>**[Menger Sponge](docs/fractals/menger-sponge.md)** |
+| [![Sierpiński Tetrahedron](docs/gallery/sierpinski-tetrahedron.jpg)](docs/fractals/sierpinski-tetrahedron.md)<br>**[Sierpiński Tetrahedron](docs/fractals/sierpinski-tetrahedron.md)** | [![Quaternion Julia](docs/gallery/quaternion-julia.jpg)](docs/fractals/quaternion-julia.md)<br>**[Quaternion Julia](docs/fractals/quaternion-julia.md)** | [![Kleinian](docs/gallery/kleinian.jpg)](docs/fractals/kleinian.md)<br>**[Kleinian](docs/fractals/kleinian.md)** |
 
 Reproducing any of them:
 
