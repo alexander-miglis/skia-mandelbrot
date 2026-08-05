@@ -178,7 +178,24 @@ It is **coloured like a plant** rather than from the shared gradient, and which 
 straight out of the rule: one of the four maps flattens the whole fern onto a vertical segment, and that
 segment is the stem, so a point is on a stem if its recent history includes that map. How recently says
 which one — applied last it gives the main stem, one map ago the midribs of the three fronds, two ago
-their sub-fronds. Three generations of that is brown and the rest is leaf, which is how a fern is built.
+their sub-fronds. For the thrown points, three generations of that is brown and the rest is leaf.
+
+Counting generations is wrong for a zoomed view, though, and looked it: the midribs on screen at a
+thousand times in are forty generations down, so every one of them came out green — long straight
+leaf-coloured lines through the middle of the picture. What decides in the box walk instead is the size
+of the piece when the flattening map was applied to it, so a stem is coloured as one if it is long
+enough to read as a line at this magnification, whichever generation it belongs to.
+
+Two measurements from the deep path, both worth keeping. **A point wider than a pixel costs eight times
+as much**: past that Skia stops filling single pixels and emits a rectangle per point, which at a couple
+of hundred thousand points is a whole frame — 88 ms against 11 ms for the same view. Drawing each point
+the size of the box it stood for covered the fern more evenly, and that is what it cost; evenness is
+bought by making the *boxes* finer instead, which is affordable because the walk itself is only about
+sixteen nanoseconds a node. And **the detail carries over between frames** rather than being searched for
+within one, because how much of the window is empty varies enormously with where the camera is while how
+full it is of fern does not. A pass that runs into the point budget is never shown: this walk is depth
+first, so running out abandons whole regions rather than losing detail evenly, leaving them black behind
+a straight edge along whatever box was being subdivided at the time.
 
 And it has nothing to find by going deeper — zoom in and you find another fern, the same fern, forever —
 so what varies over time is its **shape**: a slow shear on the one map that carries the stem, applied

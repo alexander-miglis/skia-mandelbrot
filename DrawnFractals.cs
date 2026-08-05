@@ -496,26 +496,47 @@ internal static class DrawnFractals
         // producing any. So it runs first and the count decides. Sizing the detail by hand instead —
         // trying to have the box walk cover every view — cost fourteen million boxes a frame at the
         // opening view and drew the fern as a solid silhouette.
-        int thrown = Scatter(frame, maps);
-        double width = 1.0;
+        // Throwing them is hopeless well before it is merely poor — the chance of a point landing in
+        // the window falls faster than the window shrinks — so past a certain magnification it is not
+        // even attempted, and the count decides only in the range where it might still work.
+        int thrown = frame.SpanY > 0.3 ? Scatter(frame, maps) : 0;
 
         if (thrown < ScatterFloor)
         {
             // Too far in for that. Walked as boxes: an exact cover of whatever part of the fern is on
             // screen, at a couple of pixels' detail, with each point drawn the size of the box it
             // stands for so the cover reads evenly however the branches happened to divide.
-            // Two and a half pixels rather than one: the window is as full of fern at a deep view as at
-            // a shallow one — whatever part of it is on screen fills the screen the same way — so this
-            // is what the frame can afford, and each point being drawn the size of its own box means
-            // what is lost is sharpness rather than evenness.
-            const double finest = 2.5;
+            // How fine this can afford to be is not predictable from the view: the window is as full
+            // of fern at a deep view as at a shallow one — whatever part of it is on screen fills the
+            // screen the same way — but how much of it is *empty* varies enormously. So the detail
+            // carries over from the last frame and is nudged, which costs one pass a frame instead of
+            // several, and settles within a few frames of a zoom.
+            //
+            // What must not happen is shipping a pass that ran into the budget. The walk is depth
+            // first, so running out does not lose detail evenly: it abandons whole regions, leaving
+            // them black behind a straight edge along whatever box was being subdivided at the time.
+            double detail = _fernDetail;
+            int drew = Sprinkle(frame, maps, detail);
 
-            if (Sprinkle(frame, maps, finest) >= PointBudget) Sprinkle(frame, maps, finest * 2.0);
-            else width = finest;
+            while (drew >= PointBudget && detail < CoarsestDetail)
+            {
+                detail = Math.Min(CoarsestDetail, detail * 1.6);
+                drew = Sprinkle(frame, maps, detail);
+            }
+
+            _fernDetail = _visits > VisitsAfforded ? Math.Min(CoarsestDetail, detail * 1.3)
+                : drew < PointBudget / 3 ? Math.Max(FinestDetail, detail / 1.12)
+                : detail;
         }
 
+        // One pixel a point, always. Drawing each the size of the box it stands for covers the fern
+        // more evenly, and cost eight times as much to do it: past a pixel across, Skia stops filling
+        // single pixels and starts emitting a rectangle per point, which at a couple of hundred
+        // thousand points is the whole of a frame. Ninety milliseconds against eleven. Evenness is
+        // bought by making the *boxes* finer instead, which the walk is cheap enough to afford — it is
+        // about sixteen nanoseconds a node, so a million of them is well within a frame.
         paint.Style = SKPaintStyle.Fill;
-        paint.StrokeWidth = (float)width;
+        paint.StrokeWidth = 1.0f;
         paint.StrokeCap = SKStrokeCap.Square;
 
         // Not antialiased, unlike everything else here. A few hundred thousand smoothed points is most
@@ -552,6 +573,19 @@ internal static class DrawnFractals
 
     private const int StemGenerations = 3;
 
+    /// <summary>
+    /// How long a stem has to be, in terminal boxes, for the box walk to colour it as one.
+    ///
+    /// Counting generations from the top is what the thrown points do, and it is right for them because
+    /// they only ever draw the whole fern: the main stem is the first generation, the fronds' midribs
+    /// the second. It is wrong for a zoomed view, where the midribs on screen are forty generations
+    /// down and every one of them came out green — long straight leaf-coloured lines through the middle
+    /// of the picture. What decides here instead is the size of the piece when the flattening map was
+    /// applied to it: a stem is coloured as one if it is long enough to read as a line at this
+    /// magnification, whichever generation it belongs to.
+    /// </summary>
+    private const double StemVisible = 14.0;
+
     private static readonly SKPoint[] _stems = new SKPoint[PointBudget / 4];
 
     private static int _stemPoints;
@@ -568,6 +602,20 @@ internal static class DrawnFractals
             _points[_drawnPoints++] = at;
         }
     }
+
+    /// <summary>
+    /// Detail of the box walk, in pixels, carried between frames. Bounded below by what is worth
+    /// drawing and above by what still looks like a fern; the visit ceiling is what a frame can walk in
+    /// the time it has.
+    /// </summary>
+    private static double _fernDetail = 2.5;
+
+    private const double FinestDetail = 1.0;
+
+    private const double CoarsestDetail = 12.0;
+
+    /// <summary>Nodes a frame can walk in the time it has, at about sixteen nanoseconds each.</summary>
+    private const int VisitsAfforded = 1_500_000;
 
     /// <summary>How many points to throw, and how few landing on screen means the camera has gone in
     /// too far for throwing them to work.</summary>
@@ -690,12 +738,14 @@ internal static class DrawnFractals
             return;
         }
 
+        // Whether a stem starting here would be long enough to see. The map at index zero is the one
+        // that flattens the fern onto a segment, so applying it is what makes a stem.
+        bool worthColouring = Math.Max(hx, hy) > stop * StemVisible;
+
         for (int i = 0; i < maps.Length; i++)
         {
-            // The maps chosen nearest the root are the ones applied last, so they are the ones that
-            // decide whether this is stem or leaf — the same few generations the thrown points use.
             FernPiece(frame, maps, piece.Then(maps[i]), depth + 1, stop,
-                stem || (i == 0 && depth < StemGenerations));
+                stem || (i == 0 && worthColouring));
         }
     }
 
