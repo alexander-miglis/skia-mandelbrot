@@ -69,16 +69,24 @@ jobs:
 
       - run: dotnet build -c Release
 
-      # Silk.NET reports a native library that will not load as "not applicable" and throws away the
-      # loader's reason, so ask the loader directly. Nothing here fails the job — it is here to make
-      # the next failure diagnosable instead of guessable.
-      - name: What does GLFW need
+      # A display for the whole job rather than one wrapped around each command, so that what the
+      # renderer sees is visible here too. Silk.NET reports a native library that will not load and a
+      # GLFW that will not initialise with the same "not applicable", and throws the reason away, so
+      # both are checked here instead: the loader's view of the library, and whether anything can
+      # actually get a GL context on this display.
+      - name: Start a display
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          sleep 3
+
+      - name: Check GLFW can load and GL can run
         run: |
           so=$(find . -name 'libglfw*so*' | head -1)
-          echo "found: $so"
-          ldd "$so" || true
-          echo "--- missing ---"
-          ldd "$so" 2>/dev/null | grep -i "not found" || echo "(nothing missing)"
+          echo "glfw: $so"
+          ldd "$so" 2>/dev/null | grep -i "not found" || echo "  (no missing libraries)"
+          echo "DISPLAY=$DISPLAY"
+          glxinfo -B 2>&1 | head -8 || echo "  (glxinfo failed — no GL on this display)"
 
       # One from each of the three renderers, since they share almost no code: a sampled field, a
       # drawn construction, and the wide-arithmetic path that only exists below 1e-12.
