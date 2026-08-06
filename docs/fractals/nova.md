@@ -6,7 +6,25 @@ Newton's method with the pixel added back in every step, which turns a root-find
 
 ## The rule
 
-Take the Newton step for `z³ − 1` and add a constant: `z → z − f(z)/f'(z) + c`, started from a fixed point with `c` read from the pixel. The added term keeps knocking the iteration off its roots, so instead of three clean basins you get a Mandelbrot-like structure of regions where the perturbed method still settles and regions where it never does.
+Take the Newton step for $z^3 - 1$ and add a constant read from the pixel:
+
+$$z_{n+1} = z_n - \frac{z_n^3 - 1}{3z_n^2} + c$$
+
+started from a fixed point rather than from the pixel. That single addition changes the *kind* of
+picture: where [Newton](newton.md) is a map of starting points for one equation, this is a map of
+**parameters** — one pixel per perturbed root-finder, asking whether that root-finder still works.
+
+### Why the added term breaks convergence
+
+Without $c$ the roots are superattracting and every basin is open. With it, the fixed points move: a
+fixed point now satisfies $z = z - f(z)/f'(z) + c$, that is $f(z)/f'(z) = c$, and the multiplier there
+is no longer zero. Small $c$ shifts the roots slightly and convergence survives, quadratic convergence
+degrading to linear. Large enough $c$ and the fixed point loses stability altogether, the iteration
+stops settling, and the parameter is outside the set.
+
+That is the same structure as the Mandelbrot set — a parameter plane divided into where an iteration
+settles and where it does not — which is why the Nova grows Mandelbrot-like buds around a rather
+different body, and why the same colouring works on it.
 
 ## Where it came from
 

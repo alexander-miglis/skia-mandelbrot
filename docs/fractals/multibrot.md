@@ -6,7 +6,31 @@ The Mandelbrot with the exponent turned up: `z → z³ + c` here, and the set gr
 
 ## The rule
 
-`z → z^d + c` for `d` other than 2. A degree-`d` multibrot has `d − 1`-fold rotational symmetry, so the cubic set is two-lobed and symmetric about both axes where the quadratic is one-lobed and symmetric about one. As `d` grows the set tends toward a disc with an increasingly frilled edge.
+$$z_{n+1} = z_n^{\,d} + c$$
+
+from $z_0 = 0$, with $d = 3$ here. The quadratic case is $d=2$; everything else is a multibrot.
+
+### Symmetry from the exponent
+
+Replace $c$ by $\omega c$ where $\omega^{d-1} = 1$, and substitute $z \to \omega z$: then
+$(\omega z)^d + \omega c = \omega^d z^d + \omega c = \omega\left(z^d + c\right)$, using
+$\omega^{d} = \omega$. The whole orbit is rotated by $\omega$, so it escapes exactly when the original
+does. The set therefore has **$(d-1)$-fold rotational symmetry** — one lobe for the quadratic, two for
+the cubic, and so on toward a disc with a frilled edge as $d$ grows.
+
+### The escape radius and the potential both move
+
+The bailout argument needs $|z|^d - |c| > |z|$, so the safe radius is the solution of
+$R^d - R = |c|$ rather than 2. And the smooth count changes base. Past the bailout the orbit is
+essentially $z \mapsto z^d$, which multiplies $\log|z|$ by $d$ each step, so $\log_d \log|z_n|$ — not
+$\log_2$ — is what advances by one per iteration:
+
+$$\nu = n + 1 - \frac{\log \log |z_n|}{\log d}$$
+
+Get that base wrong and the bands come out unevenly spaced, brightening or compressing as the orbit
+escapes faster. It is the one place in this program where the exponent shows up in the *colouring*
+rather than in the iteration, and [Mandelbrot.cs](../../Mandelbrot.cs) carries $\log 3$ as a constant
+for it.
 
 ## Where it came from
 

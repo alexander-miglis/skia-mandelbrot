@@ -6,7 +6,41 @@ Also called the Mandelbar: conjugate `z` before squaring, and the set grows thre
 
 ## The rule
 
-`z → conj(z)² + c`. Conjugating reverses the direction of rotation each step, which folds the familiar cardioid into a three-cornered figure with three-fold symmetry. Like the Burning Ship it is non-analytic, and for the same reason: conjugation is not complex-differentiable.
+$$z_{n+1} = \overline{z_n}^{\,2} + c$$
+
+started from zero. Conjugation reflects across the real axis, so each step turns the plane the *other*
+way before squaring. Writing $z = x+iy$:
+
+$$x_{n+1} = x_n^2 - y_n^2 + \operatorname{Re} c, \qquad y_{n+1} = -2x_n y_n + \operatorname{Im} c$$
+
+— the Mandelbrot's iteration with one sign flipped, which is all this program has to do to render it.
+
+### Where the three corners come from
+
+Write $f_c(z) = \bar z^{\,2} + c$ and let $\omega = e^{2\pi i/3}$, a cube root of 1. Substitute
+$z \to \omega z$ into the map for the parameter $\omega c$:
+
+$$\frac{1}{\omega} f_{\omega c}(\omega z) = \frac{\overline{\omega z}^{\,2} + \omega c}{\omega}
+= \frac{\bar\omega^{2}\,\bar z^{2}}{\omega} + c$$
+
+and since $\bar\omega = \omega^{-1} = \omega^{2}$, the coefficient
+$\bar\omega^{2}/\omega = \omega^{4}/\omega = 1$. So
+
+$$\frac{1}{\omega} f_{\omega c}(\omega z) = \bar z^{\,2} + c = f_c(z)$$
+
+The two maps are the same map in different coordinates. Their orbits escape together, so $c$ is in the
+set exactly when $\omega c$ is: the tricorn has **three-fold rotational symmetry**, and that is where
+the corners come from. Run the same substitution on $z^2 + c$ and it fails — the quadratic map only
+gives back the reflection $c \to \bar c$, which is why the Mandelbrot set has one cardioid and a mirror
+line where this has three of everything.
+
+### What survives from the holomorphic case
+
+Not much, but the useful parts. The map is **anti-holomorphic** — conjugation reverses orientation, so
+a single step is not complex-differentiable while the composition of two steps is — and the theory that
+proved the Mandelbrot set connected assumes holomorphy throughout. What does carry over is anything
+depending only on moduli: $|\bar z| = |z|$, so the escape radius argument and the smooth potential
+$\nu = n + 1 - \log_2\log|z_n|$ are unchanged, and rendering it costs one sign flip.
 
 ## Where it came from
 

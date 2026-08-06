@@ -6,7 +6,43 @@ A single line that visits every point of a square, without crossing itself.
 
 ## The rule
 
-Divide the square into four; visit the quadrants in an order that lets you enter one and leave the next; recurse, rotating and reflecting each sub-square so the ends line up. The limit is a continuous map from the interval onto the whole square — a curve, in the sense of being the image of a line, that has area.
+Divide the unit square into four quadrants and number them in an order where each shares an edge with
+the next. Divide each quadrant the same way, rotating and reflecting so the exit of one lands beside the
+entry of the next, and repeat. At level $n$ there are $4^n$ cells of side $2^{-n}$, visited in a single
+unbroken order.
+
+As maps it is four affine transformations of ratio $\tfrac12$, two of them plain translations and two
+including a reflection:
+
+$$h_0 = \tfrac12 M_{\text{diag}}, \qquad h_1 = \tfrac12 I, \qquad h_2 = \tfrac12 I, \qquad
+h_3 = \tfrac12 M_{\text{anti}}$$
+
+where $M_{\text{diag}}$ swaps the coordinates and $M_{\text{anti}}$ swaps and negates them. Those two
+reflections are the whole trick: without them the cells would be visited in an order that jumps across
+the square, and the curve would not be continuous.
+
+### It fills the square, and cannot be one-to-one
+
+The limit is a map $h : [0,1] \to [0,1]^2$ that is continuous and **onto**: every point of the square is
+$h(t)$ for some $t$. It cannot also be one-to-one. A continuous bijection from a compact space to a
+Hausdorff one is a homeomorphism, and the interval is not homeomorphic to the square — remove an
+interior point from the interval and it falls apart, remove one from the square and it does not. So a
+space-filling curve must revisit points, and this one does, at the cell corners.
+
+### Why it is the one used for indexing
+
+The curve is **Hölder continuous with exponent $\tfrac12$**:
+
+$$\|h(s) - h(t)\| \le C\,|s-t|^{1/2}$$
+
+and $\tfrac12$ is the best possible for any map from an interval onto a square. That is the locality
+guarantee: points a distance $\varepsilon$ apart along the curve are at most $C\sqrt{\varepsilon}$ apart
+in the plane, always. Cutting the curve into equal pieces therefore cuts the square into compact
+regions, which is why the Hilbert order is used to linearise two-dimensional data for database indexes,
+caches and image dithering — a one-dimensional address that remembers two-dimensional neighbourhood.
+
+The converse is weaker, and has to be: points can be close in the square and far apart along the curve,
+since the curve has to arrive and leave somehow. No ordering of the plane avoids that.
 
 ## Where it came from
 

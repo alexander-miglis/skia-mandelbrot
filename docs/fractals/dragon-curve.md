@@ -6,7 +6,41 @@ Fold a strip of paper in half over and over, then open it out to right angles. T
 
 ## The rule
 
-Every segment is replaced by two, meeting at a right angle, with the turn alternating side. Equivalently: take a long strip of paper, fold it in half in the same direction `n` times, unfold it so every crease is a right angle, and look at it edge on. The curve never crosses itself, and copies of it tile the plane exactly.
+In the complex plane the whole curve is two maps:
+
+$$f_1(z) = \frac{1+i}{2}\,z, \qquad f_2(z) = 1 - \frac{1-i}{2}\,z$$
+
+Both multiply by a complex number of modulus $\left|\tfrac{1\pm i}{2}\right| = \tfrac{1}{\sqrt2}$ and
+argument $\pm 45°$: shrink by $1/\sqrt2$, turn by an eighth of a turn. The dragon is the set left
+unchanged by applying both and taking the union. Equivalently, and how this program does it, replace
+each segment with two meeting at a right angle, alternating which side the corner goes.
+
+### Why folding paper gives the same thing
+
+Fold a strip in half, then in half again the same way, $n$ times, then open every crease to a right
+angle. Number the creases $1,\dots,2^n-1$ from one end; crease $k$ is a left turn or a right turn, and
+the rule is short: write $k = m\cdot 2^j$ with $m$ odd, and the turn is **left** when
+$m \equiv 1 \pmod 4$, right when $m \equiv 3$. Only the odd part of the index matters, which is
+the same statement
+as *this curve contains a half-size copy of itself*: doubling every index maps the sequence into itself.
+
+### Dimension two, and a fractal boundary
+
+Two copies at ratio $1/\sqrt2$ gives
+
+$$D = \frac{\log 2}{\log \sqrt2} = 2$$
+
+The dragon fills area. Four of them, rotated about a common point, tile the plane exactly, and copies
+of it tile the plane on their own — so it has positive area and dimension 2, while never crossing
+itself. What is genuinely fractal is its *boundary*, whose dimension is
+$\log\lambda/\log\sqrt2 \approx 1.5236$, with $\lambda$ the real root of $\lambda^3 = \lambda^2 + 2$.
+
+### The segments shrink slowly, which the code has to care about
+
+$1/\sqrt2 \approx 0.707$ per level, against $1/3$ for [Koch](koch-snowflake.md). Reaching pieces small
+enough for a view a million times in therefore takes $\log(10^{-6})/\log(0.707) \approx 40$ levels
+where Koch needs 13, and reaching the deepest view the arithmetic supports takes upwards of 160. That is
+why the recursion cap in this program is 400 rather than something tidier.
 
 ## Where it came from
 

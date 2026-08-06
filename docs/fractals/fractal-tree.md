@@ -6,7 +6,45 @@ A trunk, then two smaller copies of the whole tree at an angle to it. The simple
 
 ## The rule
 
-Draw a segment; from its tip, draw two more at ±0.42 radians, each 0.72 times the length; repeat. Two numbers — the angle and the shrink — decide everything about the shape. Push the shrink above about 0.75 and the branches begin to overlap and the canopy fills in; drop the angle and it becomes a feather.
+A branch is a point, a direction and a length. Each one draws itself and then starts two more from its
+tip, each turned by $\pm\theta$ and shortened by a factor $r$:
+
+$$\ell_{n+1} = r\,\ell_n, \qquad \phi_{n+1} = \phi_n \pm \theta$$
+
+with $r = 0.72$ and $\theta = 0.42$ radians (about 24°) here. Two numbers decide the whole shape.
+
+### How far the tree reaches
+
+A branch of length $\ell$ has descendants of length $r\ell, r^2\ell, \dots$, so however they turn, none
+of them gets further from its tip than the sum
+
+$$\ell\left(r + r^2 + r^3 + \cdots\right) = \ell\,\frac{r}{1-r} = \ell \cdot \frac{0.72}{0.28} \approx 2.57\ell$$
+
+That is a bound, not an estimate, and it is what makes drawing the tree tractable: a branch whose box,
+grown by 2.57 of its own lengths, misses the window cannot have any descendant on screen, so the whole
+subtree can be dropped. The `2.6` in [DrawnFractals.cs](../../DrawnFractals.cs) is this series.
+
+### Total length is infinite; the canopy has area
+
+Level $n$ has $2^n$ branches of length $r^n\ell$, so the total length is
+
+$$\ell\sum_{n\ge 0} (2r)^n$$
+
+which converges only when $2r < 1$. At $r = 0.72$ we have $2r = 1.44$, so the total length of the tree
+is **infinite** inside a bounded region.
+
+The tips are more interesting. They form the attractor of the two maps, and for a rule made of $N$
+similarities of ratio $r$ the dimension is $D = \log N/\log(1/r)$ — here
+
+$$D = \frac{\log 2}{\log(1/0.72)} \approx 2.11$$
+
+A dimension above 2 is impossible for a subset of the plane, and what that really says is that the
+copies **overlap**: the open set condition fails, the formula stops applying, and the true dimension is
+capped at 2. Which is not a technicality you can ignore — it is visible. Above
+$r = 1/\sqrt2 \approx 0.707$ the branch tips stop being a dust and become a set with positive area,
+and at 0.72 we are just
+past that threshold. That is why the canopy in the picture is a solid sheet with a smooth outer edge
+rather than a spray of separate twigs, and why lowering the shrink slightly would break it into one.
 
 ## Where it came from
 

@@ -6,7 +6,37 @@ A formula that came out of statistical physics rather than mathematics: the boun
 
 ## The rule
 
-`z → ((z² + c − 1) / (2z + c − 2))²`. It is a rational map, so it can do two different things — escape to infinity, or converge to a finite value — and both have to be tested for. Convergence here is to **one** rather than to zero, which is the fixed point that matters physically.
+$$z_{n+1} = \left(\frac{z_n^2 + c - 1}{2z_n + c - 2}\right)^{\!2}$$
+
+started from $z_0 = 0$. A rational map, not a polynomial, and it comes from physics rather than from
+iteration theory.
+
+### What it is a transformation of
+
+This is a **renormalisation** step for the Ising model of a magnet. The Ising model is a lattice of spins
+that prefer to align with their neighbours, and the question is whether that local preference produces
+order across the whole material. Renormalisation answers it by coarse-graining: group the spins into
+blocks, work out what effective interaction between *blocks* reproduces the same physics, and repeat.
+Each pass replaces the temperature-like parameter $z$ with a new one, and this rational map is that
+replacement.
+
+Iterating it is therefore looking at the same material at coarser and coarser scales. The fixed points
+are the phases:
+
+- orbits running off to infinity — disorder wins at large scales, the material is not magnetic;
+- orbits converging to $z = 1$ — order wins, it is magnetic.
+
+The **critical point** is the boundary between the two, the temperature at which the material changes
+phase, and that boundary is the fractal on screen. Its infinite detail is a statement about critical
+phenomena: at the transition the material has structure on every scale at once, which is what makes
+critical exponents universal across wildly different physical systems.
+
+### Two endings to test for
+
+Because it can both escape and converge, the kernel checks both every iteration: a bailout radius for
+divergence, and a threshold on $|z_{n+1} - z_n|$ for settling. It also has to guard the denominator —
+$2z + c - 2$ genuinely reaches zero — where the point is treated as interior. Convergence is counted in
+whole iterations, so like [Newton](newton.md) its deep views are flatter than an escape-time set's.
 
 ## Where it came from
 

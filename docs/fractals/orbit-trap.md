@@ -6,7 +6,33 @@ The Mandelbrot iteration, coloured by how near the orbit ever came to a circle.
 
 ## The rule
 
-The same dynamics as the Mandelbrot set, but instead of recording when the orbit escaped, record its closest approach to a circle of radius ½ about the origin. Points whose orbits pass close to that circle are bright. The set's familiar outline is still there underneath, but the interior — which escape-time colouring renders as a flat black region — fills with structure, because the orbits in there are still doing something even though they never leave.
+The Mandelbrot iteration $z_{n+1} = z_n^2 + c$, with the orbit's closest approach to a **circle**
+recorded instead of its escape time:
+
+$$\tau = \min_{n \le N} \Bigl|\,|z_n| - \tfrac12\,\Bigr|$$
+
+Colour by $\tau$. Everything about the dynamics is unchanged; only the question asked of it is
+different.
+
+### The trap can be any shape
+
+Once you notice that a pixel may be coloured by *anything* the orbit does, the trap becomes a free
+choice: a point, a line, a pair of lines ([Pickover stalks](pickover-stalks.md)), a circle, a ring of
+circles, or an image — sample the picture at $z_n$ and keep the nearest hit, and the fractal comes out
+wearing it. The formula is a supply of infinitely detailed paths, and the trap decides what to make
+visible in them.
+
+This is the sharpest demonstration in this program that a fractal's *picture* is a choice rather than a
+fact. The Mandelbrot set, its Pickover stalks and this page are the same orbits over the same plane,
+measured three ways, and they look nothing alike.
+
+### Why a circle gives rings
+
+The trap is at radius $\tfrac12$, inside the escape radius, so orbits pass across it rather than through
+it once on the way out. Points whose orbits happen to linger near that radius — which is a condition on
+the *whole* orbit, not on its ending — form a set with structure at every scale, and the near-misses
+grade smoothly between them. The result reads as concentric shells because $\tau$ depends on $|z_n|$
+only, so the trap has the symmetry the picture inherits.
 
 ## Where it came from
 

@@ -6,7 +6,53 @@ Replace the middle third of every line with two sides of a triangle, and keep go
 
 ## The rule
 
-Start with an equilateral triangle. Divide each edge into three, and replace the middle third with the other two sides of an equilateral triangle standing on it. Each step multiplies the number of segments by four and divides their length by three, so the perimeter grows by 4/3 every time and without limit — while the whole figure stays inside a circle you could draw around the original triangle. Its dimension is log 4 / log 3 ≈ 1.262.
+Take a segment and replace it with four segments, each a third as long: the first third, then two sides
+of an equilateral triangle standing on the middle third, then the last third. Do that to every segment
+of the result, forever.
+
+As transformations of the plane it is four similarities of ratio $\tfrac13$ — no shear, no distortion,
+only shrink-and-turn:
+
+$$f_1 = \tfrac13\,R_{0^\circ}, \quad f_2 = \tfrac13\,R_{60^\circ}, \quad
+f_3 = \tfrac13\,R_{-60^\circ}, \quad f_4 = \tfrac13\,R_{0^\circ}$$
+
+each followed by the shift that puts it at its place along the segment. The curve is the set left
+unchanged by applying all four and taking the union, exactly as for [the fern](barnsley-fern.md) —
+same theorem, simpler maps.
+
+### The dimension
+
+When a set is $N$ copies of itself at ratio $r$, its dimension is whatever makes the count and the
+scaling agree, $N r^D = 1$:
+
+$$D = \frac{\log N}{\log (1/r)} = \frac{\log 4}{\log 3} \approx 1.2619$$
+
+Not an integer, which is the whole point of the word *fractal*. Measure the curve with rulers of length
+$3^{-n}$ and you need $4^n$ of them; halving the ruler more than doubles the count, so the "length"
+depends on the ruler and has no limit — while the *area* is zero, since the curve is nowhere thick.
+It is more than a line and less than a surface.
+
+### Infinite perimeter, finite area
+
+Each step multiplies the number of segments by 4 and divides their length by 3, so the perimeter after
+$n$ steps is $\left(\tfrac43\right)^n$ times the original and grows without bound. The area does not.
+Step $n$ adds $3\cdot 4^{\,n-1}$ new triangles, each with $\tfrac19$ the area of the ones added before,
+so the total added is the geometric series
+
+$$\frac{3}{9}\left(1 + \frac49 + \left(\frac49\right)^2 + \cdots\right) = \frac{3}{9}\cdot\frac{1}{1-4/9}
+= \frac{3}{5}$$
+
+of the original triangle's area. The snowflake settles at exactly $\tfrac85$ of the triangle you
+started with, bounded for ever by a curve of infinite length.
+
+### No tangent anywhere
+
+At every stage the curve is made of straight pieces, and the limit is continuous: step $n$ moves any
+point by at most $3^{-n}$ times a constant, so the sequence of curves is uniformly Cauchy and converges
+to a continuous one. But take any point and any scale, and within that scale the curve still turns
+through $60°$ — the corners never smooth out, because the construction puts fresh ones at every level.
+So the direction never settles, no tangent exists, and the curve is differentiable nowhere. That is the
+property von Koch built it to demonstrate.
 
 ## Where it came from
 

@@ -6,7 +6,44 @@ The Mandelbrot iteration with absolute values taken before squaring, which break
 
 ## The rule
 
-`z → (|Re z| + i·|Im z|)² + c`. The absolute values make the map non-analytic — it is not a function of `z` in the complex-differentiable sense — and almost none of the Mandelbrot's theory survives that. What survives is the picture, which has hulls, masts and a rigging of antennae.
+$$z_{n+1} = \left(|\operatorname{Re} z_n| + i\,|\operatorname{Im} z_n|\right)^2 + c$$
+
+started from $z_0 = 0$, with $c$ the pixel. Written out, with $z = x+iy$:
+
+$$x_{n+1} = x_n^2 - y_n^2 + \operatorname{Re} c, \qquad y_{n+1} = 2\,|x_n y_n| + \operatorname{Im} c$$
+
+The only difference from the Mandelbrot is the absolute value on the cross term, and it changes the
+subject entirely.
+
+### Why losing analyticity matters
+
+$z \mapsto z^2$ is complex-differentiable; $z \mapsto |{\operatorname{Re} z}| + i|\operatorname{Im} z|$ is
+not, at any point where either part vanishes. The map folds the plane along both axes instead of turning
+it smoothly. Almost every tool that built the theory of the Mandelbrot set assumes holomorphy — the
+Riemann map that proves connectivity, the critical-orbit dichotomy, the whole apparatus of external
+rays — and none of it is available here. There is no theorem saying the Burning Ship is connected, and
+its structure is studied largely by picture.
+
+What survives is the escape criterion, because the folding does not change any modulus:
+$\left||x| + i|y|\right| = |z|$, so the same radius-2 argument applies unchanged and the same
+smooth potential
+$\nu = n + 1 - \log_2\log|z_n|$ can be used to colour it.
+
+### Where the ship comes from
+
+The fold makes $y$ non-negative after the first step, and the picture stops being symmetric about the
+real axis in the way the Mandelbrot is: the conjugate symmetry $z \to \bar z$ that mirrors the Mandelbrot
+about its axis is exactly what the absolute values destroy. Instead the shapes stack into hulls and
+masts — the "ship" is a detail near $c = -1.75 + 0.03i$, not the whole set, and the whole set looks
+rather less like anything.
+
+### Deep zoom without perturbation
+
+A known perturbed form exists, but it needs the sign of the reference orbit's components carried
+through, with a fallback wherever $Z$ passes near an axis and the sign is about to flip. This program
+does not implement it and instead widens the arithmetic below $10^{-12}$ — see
+[Dd.cs](../../Dd.cs). Measured across 64 neighbouring pixels at a scale of $10^{-20}$: the double kernel
+returns **one** distinct value, the wide kernel **42**.
 
 ## Where it came from
 

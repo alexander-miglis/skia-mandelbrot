@@ -6,7 +6,38 @@ The same iteration as a Julia set, but what is recorded is not when the orbit es
 
 ## The rule
 
-Iterate as usual, but at every step measure the distance from the orbit to the real and imaginary axes and remember the smallest one seen. Colour by that. Points whose orbits happen to graze an axis come out bright, and because "grazing an axis" is a much finer condition than "escaped by step n", the result is a network of thin stalks running through regions that escape-time colouring shows as smooth.
+The iteration is an ordinary Julia one,
+
+$$z_{n+1} = z_n^2 + k$$
+
+but what is recorded is not when it escaped. At every step, measure how close the orbit came to the two
+axes and keep the smallest value seen:
+
+$$\tau = \min_{n \le N} \min\bigl(|\operatorname{Re} z_n|,\ |\operatorname{Im} z_n|\bigr)$$
+
+Colour by $\tau$. This is an **orbit trap**: a region of the plane that the orbit is watched for, rather
+than a test of where the orbit ends up.
+
+### Why it shows what escape time cannot
+
+Escape time is constant on large regions — every point of the interior escapes never, and the exterior
+is graded smoothly by the potential. The trap distance is not. Whether an orbit passes near an axis
+depends on the whole path, and the path depends on the starting point chaotically, so $\tau$ varies on
+arbitrarily fine scales in places where the escape count is flat. In particular the *interior*, which
+escape-time colouring renders as a black region with nothing in it, is where orbits wander for ever and
+have the most opportunities to graze a trap. The stalks are the level sets of that.
+
+Pickover's original was the **epsilon cross**: count the point if the orbit ever comes within
+$\varepsilon$ of either axis. Taking the minimum instead of a yes-or-no test is the same idea made
+continuous, so it can be fed into a gradient rather than a binary mask.
+
+### Choices that shape the picture
+
+The trap is applied to a Julia iteration rather than a Mandelbrot one, because a fixed $k$ makes the
+orbits linger near the axes rather than escaping quickly. The distance is turned into a palette
+coordinate through a logarithm, so an orbit that comes ten times closer moves a fixed distance along the
+gradient rather than saturating. And the iteration is capped well below the full budget — the closest
+approach nearly always happens early, long before an escape count would be decided.
 
 ## Where it came from
 

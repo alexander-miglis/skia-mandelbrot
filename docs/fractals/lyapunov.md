@@ -6,7 +6,43 @@ Not an escape time and not even a set: a map of how chaotic the logistic map is,
 
 ## The rule
 
-Iterate the logistic map `x → r·x·(1 − x)`, but alternate `r` between two values **A** and **B** on a fixed schedule — this program uses `AABAB`. Measure the Lyapunov exponent of the resulting orbit: the average of `log|dx'/dx|`, which says whether nearby starting points pull apart (chaos, positive) or fall together (a stable cycle, negative). Plot that over the A–B plane. The stable regions are the structure; the chaotic ones are left black.
+Not an escape time and not a set of points in the plane — a measurement, plotted over a plane of two
+parameters.
+
+### The logistic map and its exponent
+
+Iterate $x_{n+1} = r\,x_n(1-x_n)$ on $[0,1]$. Whether nearby starting points converge or separate is
+decided by the derivative $f'(x) = r(1-2x)$ along the orbit: after $N$ steps a small displacement is
+multiplied by $\prod_{n} f'(x_n)$. The **Lyapunov exponent** is the average logarithm of that,
+
+$$\lambda = \lim_{N\to\infty} \frac{1}{N}\sum_{n=1}^{N} \ln\bigl|r\,(1 - 2x_n)\bigr|$$
+
+so a displacement grows like $e^{\lambda N}$. Negative $\lambda$ means nearby points fall together: the
+orbit settles into a stable cycle. Positive $\lambda$ means they pull apart exponentially — chaos, and
+sensitive dependence on initial conditions in its literal, quantitative form.
+
+### Two rates instead of one
+
+Now alternate $r$ between two values $A$ and $B$ on a fixed repeating schedule — this program uses
+`AABAB` — and plot $\lambda$ over the $(A,B)$ plane. That is the whole fractal. The stable regions
+($\lambda < 0$) carry the colour and the chaotic ones are left black.
+
+The forcing string is a genuine parameter of the picture, and the only one of its kind here: change
+`AABAB` to something else and the same mathematics produces a different fractal. The swallow-like shapes
+this one is known for belong to that string.
+
+### Why perturbation cannot help it, and wide arithmetic can
+
+Every deep-zoom shortcut in this program depends on the iteration being analytic in the parameter, so
+that a nearby pixel's orbit can be written as a small correction to a reference orbit. Here the
+iteration is chaotic *by construction* — the interesting region is exactly where nearby orbits diverge
+exponentially — so a reference orbit stops representing its neighbours after a handful of steps. There is
+nothing to derive.
+
+Wider arithmetic asks for none of that. It simply carries more digits of $x$, which is why this fractal
+zooms in this program at all. The logarithms stay in double precision: a few thousand of them are summed
+and divided by their count, so their individual rounding washes out, while the map itself needs the
+width.
 
 ## Where it came from
 
